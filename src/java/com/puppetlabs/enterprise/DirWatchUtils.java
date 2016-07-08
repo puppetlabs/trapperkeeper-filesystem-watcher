@@ -25,22 +25,12 @@ public class DirWatchUtils {
      * Register the given directory with the WatchService
      */
     public static void register(final WatchService watcher,
-                                final Map<WatchKey, Path> keys,
                                 final Path dir) throws IOException {
-        WatchKey key =  dir.register(watcher,  new WatchEvent.Kind[]{
+        dir.register(watcher,  new WatchEvent.Kind[]{
                 StandardWatchEventKinds.ENTRY_MODIFY,
                 StandardWatchEventKinds.ENTRY_CREATE,
                 StandardWatchEventKinds.ENTRY_DELETE},
                 SensitivityWatchEventModifier.HIGH);
-        Path prev = keys.get(key);
-        if (prev == null) {
-            log.debug("Registering watched path: ", dir);
-        } else {
-            if (!dir.equals(prev)) {
-                log.debug(String.format("Update watched path: %s -> %s", prev, dir));
-            }
-        }
-        keys.put(key, dir);
     }
 
     /**
@@ -49,15 +39,14 @@ public class DirWatchUtils {
      */
     public static void registerRecursive(
             final WatchService watcher,
-            final List<Path> startingPaths,
-            final Map<WatchKey, Path> keys) throws IOException {
+            final List<Path> startingPaths) throws IOException {
         for (Path start : startingPaths) {
             // register directory and sub-directories
             Files.walkFileTree(start, new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
                         throws IOException {
-                    register(watcher, keys, dir);
+                    register(watcher, dir);
                     return FileVisitResult.CONTINUE;
                 }
             });

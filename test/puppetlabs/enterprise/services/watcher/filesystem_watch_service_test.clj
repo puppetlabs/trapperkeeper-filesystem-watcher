@@ -45,6 +45,12 @@
               (println "timed-out waiting for events")
               @dest)))))))
 
+(defn watch!
+  [service root callback]
+  (let [watcher (create-watcher! service)]
+    (add-watch-dir! service watcher root {:recursive true})
+    (add-callback! service watcher callback)))
+
 (deftest ^:integration single-path-test
   (let [root (fs/temp-dir "single-path-test")
         first-file (fs/normalized (fs/file root "first-file"))
@@ -55,7 +61,7 @@
      app watch-service-and-deps {}
      (testing "watch-dir! can be called to initiate watching of a directory"
        (let [service (tk-app/get-service app :FilesystemWatchService)]
-         (watch-dir! service root callback)))
+         (watch! service root callback)))
      (testing "callback not invoked until directory changes"
        (is (= @results [])))
      (testing "callback is invoked when a new file is created"
@@ -112,8 +118,8 @@
      app watch-service-and-deps {}
      (testing "watch-dir! can be called to initiate watching of multiple directories"
        (let [service (tk-app/get-service app :FilesystemWatchService)]
-         (watch-dir! service root-1 callback-1)
-         (watch-dir! service root-2 callback-2)))
+         (watch! service root-1 callback-1)
+         (watch! service root-2 callback-2)))
      (testing "callback-1 is invoked when root-1 changes"
        (spit root-1-file "foo")
        (let [events #{{:path root-1-file
@@ -152,7 +158,7 @@
      app watch-service-and-deps {}
      (testing "watch-dir! can be used to watch nested files/directories"
        (let [service (tk-app/get-service app :FilesystemWatchService)]
-         (watch-dir! service root-dir callback)))
+         (watch! service root-dir callback)))
      (testing "file creation at root dir"
        (let [test-file (fs/normalized (fs/file root-dir "foo"))]
          (spit test-file "foo")
@@ -213,7 +219,7 @@
         callback (fn [& _] (throw error))]
     (let [app (tk/boot-services-with-config watch-service-and-deps {})
           service (tk-app/get-service app :FilesystemWatchService)]
-      (watch-dir! service root-dir callback)
+      (watch! service root-dir callback)
       (with-test-logging
        (spit (fs/file root-dir "test-file") "foo")
        (let [reason (tk-internal/wait-for-app-shutdown app)]

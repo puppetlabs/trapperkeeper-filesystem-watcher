@@ -4,8 +4,7 @@
             [puppetlabs.enterprise.services.protocols.filesystem-watch-service :refer :all]
             [puppetlabs.enterprise.services.watcher.filesystem-watch-core :as watch-core])
   (:import (java.nio.file FileSystems)
-           (com.puppetlabs.enterprise DirWatchUtils)
-           (java.util HashMap)))
+           (com.puppetlabs.enterprise DirWatchUtils)))
 
 (tk/defservice filesystem-watch-service
   FilesystemWatchService
@@ -14,17 +13,13 @@
 
   (init
     [this context]
-    {:watched-paths (atom {})
-     :watch-service (.newWatchService (FileSystems/getDefault))
-     :watch-keys (HashMap.) ;; Must be a mutable map because Java :(
+    {:watchers (atom [])
      :stopped? (atom false)})
 
   (start
     [this context]
-    (let [{:keys [watched-paths watch-service watch-keys stopped?]} context]
-      (watch-core/schedule-watching! watched-paths
-                                     watch-service
-                                     watch-keys
+    (let [{:keys [watchers stopped?]} context]
+      (watch-core/schedule-watching! watchers
                                      after
                                      stopped?
                                      (partial shutdown-on-error (tk/service-id this))))
@@ -35,16 +30,29 @@
     ;; This signals to the background thread that it should stop polling
     ;; the filesystem for changes and terminate.
     (reset! (:stopped? context) true)
-    ;; Shut down the WatchService
-    (.close (:watch-service context))
+    ;; Shut down the WatchServices
+    (doseq [watcher @(:watchers context)]
+      (.close (:watch-service watcher)))
     context)
 
-  (watch-dir!
-    [this path callback]
-    (let [normalized-path (watch-core/normalized-path-str path)
-          {:keys [watched-paths watch-service watch-keys]} (tk/service-context this)]
-      (watch-core/validate-path! (keys @watched-paths) normalized-path)
-      (DirWatchUtils/registerRecursive watch-service
-                                       [(.toPath (fs/file normalized-path))]
-                                       watch-keys)
-      (swap! watched-paths assoc normalized-path callback))))
+  (create-watcher!
+   [this]
+   (let [{:keys [watchers]} (tk/service-context this)
+         watch-service (.newWatchService (FileSystems/getDefault))
+         watcher {:watch-service watch-service
+                  :callbacks (atom [])}]
+     (swap! watchers conj watcher)
+     watcher))
+
+  (add-watch-dir!
+   [this watcher dir options]
+   (watch-core/validate-watch-options! options)
+   (let [normalized-path (watch-core/normalized-path-str dir)]
+     (DirWatchUtils/registerRecursive (:watch-service watcher) [(.toPath (fs/file normalized-path))])))
+
+  (add-callback!
+   [this watcher callback]
+   (swap! (:callbacks watcher) conj callback)))
+
+
+
