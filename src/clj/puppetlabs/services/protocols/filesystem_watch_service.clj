@@ -1,4 +1,4 @@
-(ns puppetlabs.enterprise.services.protocols.filesystem-watch-service
+(ns puppetlabs.services.protocols.filesystem-watch-service
   (:require [schema.core :as schema])
   (:import (java.io File)))
 

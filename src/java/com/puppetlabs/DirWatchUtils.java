@@ -1,4 +1,4 @@
-package com.puppetlabs.enterprise;
+package com.puppetlabs;
 
 import com.sun.nio.file.SensitivityWatchEventModifier;
 import org.slf4j.LoggerFactory;

@@ -1,13 +1,13 @@
-(ns puppetlabs.enterprise.services.watcher.filesystem-watch-core
+(ns puppetlabs.services.watcher.filesystem-watch-core
   (:require [clojure.tools.logging :as log]
             [me.raynes.fs :as fs]
             [schema.core :as schema]
             [puppetlabs.i18n.core :refer [trs]]
             [puppetlabs.kitchensink.core :as ks]
-            [puppetlabs.enterprise.services.protocols.filesystem-watch-service :as watch-protocol])
+            [puppetlabs.services.protocols.filesystem-watch-service :as watch-protocol])
   (:import (clojure.lang Atom IFn)
            (java.nio.file StandardWatchEventKinds Path WatchEvent)
-           (com.puppetlabs.enterprise DirWatchUtils)))
+           (com.puppetlabs DirWatchUtils)))
 
 (def poll-interval-ms
   1000) ;; 1 second

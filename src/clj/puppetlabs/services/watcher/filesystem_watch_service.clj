@@ -1,10 +1,10 @@
-(ns puppetlabs.enterprise.services.watcher.filesystem-watch-service
+(ns puppetlabs.services.watcher.filesystem-watch-service
   (:require [me.raynes.fs :as fs]
             [puppetlabs.trapperkeeper.services :as tk]
-            [puppetlabs.enterprise.services.protocols.filesystem-watch-service :refer :all]
-            [puppetlabs.enterprise.services.watcher.filesystem-watch-core :as watch-core])
+            [puppetlabs.services.protocols.filesystem-watch-service :refer :all]
+            [puppetlabs.services.watcher.filesystem-watch-core :as watch-core])
   (:import (java.nio.file FileSystems)
-           (com.puppetlabs.enterprise DirWatchUtils)))
+           (com.puppetlabs DirWatchUtils)))
 
 (tk/defservice filesystem-watch-service
   FilesystemWatchService
