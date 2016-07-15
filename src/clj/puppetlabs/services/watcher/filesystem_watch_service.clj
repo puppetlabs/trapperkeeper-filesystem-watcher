@@ -1,9 +1,11 @@
 (ns puppetlabs.services.watcher.filesystem-watch-service
-  (:require [me.raynes.fs :as fs]
+  (:require [clojure.tools.logging :as log]
+            [me.raynes.fs :as fs]
             [puppetlabs.trapperkeeper.services :as tk]
             [puppetlabs.services.protocols.filesystem-watch-service :refer :all]
             [puppetlabs.services.watcher.filesystem-watch-core :as watch-core])
-  (:import (java.nio.file FileSystems)
+  (:import (java.io IOException)
+           (java.nio.file FileSystems)
            (com.puppetlabs DirWatchUtils)))
 
 (tk/defservice filesystem-watch-service
@@ -32,7 +34,10 @@
     (reset! (:stopped? context) true)
     ;; Shut down the WatchServices
     (doseq [watcher @(:watchers context)]
-      (.close (:watch-service watcher)))
+      (try
+        (.close (:watch-service watcher))
+        (catch IOException e
+          (log/warn e "Exception while closing watch service"))))
     context)
 
   (create-watcher!
