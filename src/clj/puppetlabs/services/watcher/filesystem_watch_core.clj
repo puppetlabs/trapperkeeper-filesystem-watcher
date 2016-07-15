@@ -19,7 +19,8 @@
 (def event-type-mappings
   {StandardWatchEventKinds/ENTRY_CREATE :create
    StandardWatchEventKinds/ENTRY_MODIFY :modify
-   StandardWatchEventKinds/ENTRY_DELETE :delete})
+   StandardWatchEventKinds/ENTRY_DELETE :delete
+   StandardWatchEventKinds/OVERFLOW :unknown})
 
 (schema/defn clojurize :- watch-protocol/Event
   [event :- WatchEvent
@@ -48,11 +49,6 @@
   [options]
   (when-not (= true (:recursive options))
     (throw (IllegalArgumentException. "Support for non-recursive directory watching not yet implemented"))))
-
-(defn handle-overflow-events!
-  [events]
-  (when (some #(= (.kind %) StandardWatchEventKinds/OVERFLOW) events)
-    (throw (IllegalStateException. "don't know how to handle OVERFLOW event kind"))))
 
 (defn watch-new-directories!
   [events watcher]
@@ -114,7 +110,6 @@
                           (pprint-events events)))
           (log/trace (trs "orig-events:\n{0}"
                           (ks/pprint-to-string (map clojurize-for-logging orig-events))))
-          (handle-overflow-events! orig-events)
           (shutdown-on-error #(doseq [callback callbacks]
                                (callback events)))
           (watch-new-directories! events watcher)

@@ -4,7 +4,7 @@
 
 (def Event
   "Schema for an event on a file watched by this service."
-  {:type (schema/enum :create :modify :delete)
+  {:type (schema/enum :create :modify :delete :unknown)
    :path File})
 
 ;; TODO: add schema for Watcher {:watch-service WatchService :callbacks (schema/atom [IFn])}
