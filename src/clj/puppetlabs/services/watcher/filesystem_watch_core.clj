@@ -6,21 +6,37 @@
             [puppetlabs.kitchensink.core :as ks]
             [puppetlabs.services.protocols.filesystem-watch-service :as watch-protocol])
   (:import (clojure.lang Atom IFn)
-           (java.nio.file StandardWatchEventKinds Path WatchEvent)
+           (java.nio.file StandardWatchEventKinds Path WatchEvent WatchService)
            (com.puppetlabs DirWatchUtils)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Constants
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def poll-interval-ms
   1000) ;; 1 second
-
-(defn normalized-path-str
-  [path]
-  (str (fs/normalized path)))
 
 (def event-type-mappings
   {StandardWatchEventKinds/ENTRY_CREATE :create
    StandardWatchEventKinds/ENTRY_MODIFY :modify
    StandardWatchEventKinds/ENTRY_DELETE :delete
    StandardWatchEventKinds/OVERFLOW :unknown})
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Schemas
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def Watcher
+  {:watch-service WatchService
+   :callbacks (schema/atom [IFn])})
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn normalized-path-str
+  [path]
+  (str (fs/normalized path)))
 
 (schema/defn clojurize :- watch-protocol/Event
   [event :- WatchEvent
@@ -71,7 +87,7 @@
 ;; are heavily influenced by WatchDir.java from Java's official documentation:
 ;; https://docs.oracle.com/javase/tutorial/essential/io/notification.html
 (schema/defn handle-watch-events!
-  [watchers
+  [watchers :- [Watcher]
    shutdown-on-error :- IFn]
 
   ;; If we were going to add any additional "debouncing" here I think it
@@ -97,7 +113,7 @@
   ;;
   ;; https://tickets.puppetlabs.com/browse/PE-15621
 
-  (doseq [watcher @watchers]
+  (doseq [watcher watchers]
     (when-let [watch-key (.poll (:watch-service watcher))]
       (let [orig-events (.pollEvents watch-key)
             events (map #(clojurize % (.watchable watch-key)) orig-events)
@@ -118,7 +134,7 @@
 (defn handle-events-and-reschedule!
   [watchers after stopped? shutdown-on-error]
   (when-not @stopped?
-    (handle-watch-events! watchers shutdown-on-error)
+    (handle-watch-events! @watchers shutdown-on-error)
     (after poll-interval-ms
      #(handle-events-and-reschedule! watchers
                                      after
@@ -126,7 +142,7 @@
                                      shutdown-on-error))))
 
 (schema/defn ^:always-validate schedule-watching!
-  [watchers
+  [watchers :- (schema/atom [Watcher])
    after :- IFn
    stopped? :- Atom
    shutdown-on-error :- IFn]

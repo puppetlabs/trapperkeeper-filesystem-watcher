@@ -7,8 +7,6 @@
   {:type (schema/enum :create :modify :delete :unknown)
    :path File})
 
-;; TODO: add schema for Watcher {:watch-service WatchService :callbacks (schema/atom [IFn])}
-
 (defprotocol FilesystemWatchService
 
   (create-watcher! [this]
