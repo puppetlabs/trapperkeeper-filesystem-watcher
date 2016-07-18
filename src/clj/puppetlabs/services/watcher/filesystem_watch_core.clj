@@ -71,13 +71,16 @@
   (map->WatcherImpl {:watch-service (.newWatchService (FileSystems/getDefault))
                      :callbacks (atom [])}))
 
-(defn watch-new-directories!
-  [events watcher]
+(schema/defn watch-new-directories!
+  [events :- [Event]
+   watcher :- (schema/protocol Watcher)]
   (let [dir-create? (fn [event]
                       (and (= :create (:type event))
                            (fs/directory? (:path event))))]
     (DirWatchUtils/registerRecursive (:watch-service watcher)
-                                     (filter dir-create? events))))
+                                     (->> events
+                                          (filter dir-create?)
+                                          (map #(.toPath (:path %)))))))
 
 (defn reset-key-and-unwatch-deleted!
   [watch-key]

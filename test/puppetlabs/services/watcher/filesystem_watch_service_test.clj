@@ -209,7 +209,28 @@
          (is (fs/delete-dir intermediate-dir))
          (let [events #{{:path intermediate-dir
                          :type :delete}}]
-           (is (= events (wait-for-events results events)))))))))
+           (is (= events (wait-for-events results events)))))
+       (let [another-nested-dir (fs/file root-dir "another-nested-dir")
+             new-nested-file (fs/file another-nested-dir "new-nested-file")]
+         (testing "new nested directory"
+           (testing "creation"
+             (reset! results [])
+             (is (fs/mkdir another-nested-dir))
+             (let [events #{{:path another-nested-dir
+                             :type :create}}]
+               (is (= events (wait-for-events results events)))))
+           (testing "creation of a file within"
+             (reset! results [])
+             (spit new-nested-file "new nested file in nested dir")
+             (let [events #{{:path new-nested-file
+                             :type :create}}]
+               (is (= events (wait-for-events results events)))))
+           (testing "deletion"
+             (reset! results [])
+             (is (fs/delete-dir another-nested-dir))
+             (let [events #{{:path another-nested-dir
+                             :type :delete}}]
+               (is (= events (wait-for-events results events)))))))))))
 
 (deftest callback-exception-shutdown
   (let [root-dir (fs/temp-dir "root-dir")
