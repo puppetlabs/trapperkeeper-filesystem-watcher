@@ -52,8 +52,9 @@
   (add-watch-dir!
    [this watcher dir options]
    (watch-core/validate-watch-options! options)
-   (let [normalized-path (watch-core/normalized-path-str dir)]
-     (DirWatchUtils/registerRecursive (:watch-service watcher) [(.toPath (fs/file normalized-path))])))
+   (DirWatchUtils/registerRecursive
+    (:watch-service watcher)
+    [(.toPath (fs/file dir))]))
 
   (add-callback!
    [this watcher callback]

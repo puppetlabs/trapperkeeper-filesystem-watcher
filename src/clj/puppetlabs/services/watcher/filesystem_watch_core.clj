@@ -34,17 +34,13 @@
 ;;; Functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn normalized-path-str
-  [path]
-  (str (fs/normalized path)))
-
 (schema/defn clojurize :- watch-protocol/Event
   [event :- WatchEvent
    watch-path :- Path]
   {:type (get event-type-mappings (.kind event))
    :path (-> watch-path
              (.resolve (.context event))
-             fs/normalized)})
+             fs/file)})
 
 ;; This is quite similar to the function above but it is more a direct
 ;; conversion of the exact data available on a specific WatchEvent instance,

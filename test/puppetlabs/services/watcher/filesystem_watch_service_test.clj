@@ -53,8 +53,8 @@
 
 (deftest ^:integration single-path-test
   (let [root (fs/temp-dir "single-path-test")
-        first-file (fs/normalized (fs/file root "first-file"))
-        second-file (fs/normalized (fs/file root "second-file"))
+        first-file (fs/file root "first-file")
+        second-file (fs/file root "second-file")
         results (atom [])
         callback (make-callback results)]
     (with-app-with-config
@@ -108,8 +108,8 @@
 (deftest ^:integration multi-callbacks-test
   (let [root-1 (fs/temp-dir "multi-root-test-1")
         root-2 (fs/temp-dir "multi-root-test-2")
-        root-1-file (fs/normalized (fs/file root-1 "test-file"))
-        root-2-file (fs/normalized (fs/file root-2 "test-file"))
+        root-1-file (fs/file root-1 "test-file")
+        root-2-file (fs/file root-2 "test-file")
         results-1 (atom [])
         results-2 (atom [])
         callback-1 (make-callback results-1)
@@ -149,8 +149,8 @@
 
 (deftest ^:integration nested-files-test
   (let [root-dir (fs/temp-dir "root-dir")
-        intermediate-dir (fs/normalized (fs/file root-dir "intermediate-dir"))
-        nested-dir (fs/normalized (fs/file intermediate-dir "nested-dir"))
+        intermediate-dir (fs/file root-dir "intermediate-dir")
+        nested-dir (fs/file intermediate-dir "nested-dir")
         results (atom [])
         callback (make-callback results)]
     (is (fs/mkdirs nested-dir))
@@ -160,28 +160,28 @@
        (let [service (tk-app/get-service app :FilesystemWatchService)]
          (watch! service root-dir callback)))
      (testing "file creation at root dir"
-       (let [test-file (fs/normalized (fs/file root-dir "foo"))]
+       (let [test-file (fs/file root-dir "foo")]
          (spit test-file "foo")
          (let [events #{{:path test-file
                          :type :create}}]
            (is (= events (wait-for-events results events))))))
      (testing "file creation at one level down"
-       (let [test-file (fs/normalized (fs/file intermediate-dir "foo"))]
+       (let [test-file (fs/file intermediate-dir "foo")]
          (reset! results [])
          (spit test-file "foo")
          (let [events #{{:path test-file
                          :type :create}}]
            (is (= events (wait-for-events results events))))))
      (testing "file creation two levels down"
-       (let [test-file (fs/normalized (fs/file nested-dir "foo"))]
+       (let [test-file (fs/file nested-dir "foo")]
          (reset! results [])
          (spit test-file "foo")
          (let [events #{{:path test-file
                          :type :create}}]
            (is (= events (wait-for-events results events))))))
-     (let [root-file (fs/normalized (fs/file root-dir "bar"))
-           intermediate-file (fs/normalized (fs/file intermediate-dir "bar"))
-           nested-file (fs/normalized (fs/file nested-dir "bar"))]
+     (let [root-file (fs/file root-dir "bar")
+           intermediate-file (fs/file intermediate-dir "bar")
+           nested-file (fs/file nested-dir "bar")]
        (testing "file creation at all three levels"
          (reset! results [])
          (spit root-file "bar")
