@@ -12,7 +12,11 @@
     "Given a directory on the filesystem, initiate watching of dir.  The
     watcher's callbacks will be invoked when dir changes.  Available options are:
       * :recursive true   - If true, callbacks will be invoked when dir or any
-                            file underneath dir changes.")
+                            file underneath dir changes.
+
+    If dir is deleted, the watch is invalidated; if dir is recreated, the
+    watcher's callbacks will not be invoked unless add-watch-dir! is called
+    a second time to re-establish the watch on dir.")
 
   (add-callback! [this callback]
     "Adds a callback to a Watcher.  The callback will be invoked when any
