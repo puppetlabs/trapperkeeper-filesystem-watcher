@@ -103,7 +103,24 @@
                          :type :delete}
                         {:path second-file
                          :type :delete}}]
-           (is (= events (wait-for-events results events)))))))))
+           (is (= events (wait-for-events results events))))))
+     (testing "re-creation of a deleted directory"
+       (reset! results [])
+       (let [sub-dir (fs/file root "sub-dir")]
+         (testing "Initial directory creation and deletion"
+           (is (fs/mkdir sub-dir))
+           (let [events #{{:path sub-dir
+                           :type :create}}]
+             (is (= events (wait-for-events results events))))
+           (is (fs/delete sub-dir))
+           (let [events #{{:path sub-dir
+                           :type :delete}}]
+             (is (= events (wait-for-events results events)))))
+         (testing "Re-creating the directory fires an event as expcted"
+           (is (fs/mkdir sub-dir))
+           (let [events #{{:path sub-dir
+                           :type :create}}]
+             (is (= events (wait-for-events results events))))))))))
 
 (deftest ^:integration multi-callbacks-test
   (let [root-1 (fs/temp-dir "multi-root-test-1")
