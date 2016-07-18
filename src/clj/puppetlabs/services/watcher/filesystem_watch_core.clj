@@ -4,9 +4,9 @@
             [schema.core :as schema]
             [puppetlabs.i18n.core :refer [trs]]
             [puppetlabs.kitchensink.core :as ks]
-            [puppetlabs.services.protocols.filesystem-watch-service :as watch-protocol])
+            [puppetlabs.services.protocols.filesystem-watch-service :refer [Event Watcher]])
   (:import (clojure.lang Atom IFn)
-           (java.nio.file StandardWatchEventKinds Path WatchEvent WatchService)
+           (java.nio.file StandardWatchEventKinds Path WatchEvent FileSystems)
            (com.puppetlabs DirWatchUtils)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -23,18 +23,10 @@
    StandardWatchEventKinds/OVERFLOW :unknown})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Schemas
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(def Watcher
-  {:watch-service WatchService
-   :callbacks (schema/atom [IFn])})
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(schema/defn clojurize :- watch-protocol/Event
+(schema/defn clojurize :- Event
   [event :- WatchEvent
    watch-path :- Path]
   {:type (get event-type-mappings (.kind event))
@@ -62,6 +54,23 @@
   (when-not (= true (:recursive options))
     (throw (IllegalArgumentException. "Support for non-recursive directory watching not yet implemented"))))
 
+(defrecord WatcherImpl
+  [watch-service callbacks]
+  Watcher
+  (add-watch-dir!
+    [this dir options]
+    (validate-watch-options! options)
+    (DirWatchUtils/registerRecursive watch-service
+                                     [(.toPath (fs/file dir))]))
+  (add-callback!
+    [this callback]
+    (swap! callbacks conj callback)))
+
+(defn create-watcher
+  []
+  (map->WatcherImpl {:watch-service (.newWatchService (FileSystems/getDefault))
+                     :callbacks (atom [])}))
+
 (defn watch-new-directories!
   [events watcher]
   (let [dir-create? (fn [event]
@@ -83,7 +92,7 @@
 ;; are heavily influenced by WatchDir.java from Java's official documentation:
 ;; https://docs.oracle.com/javase/tutorial/essential/io/notification.html
 (schema/defn handle-watch-events!
-  [watchers :- [Watcher]
+  [watchers :- [(schema/protocol Watcher)]
    shutdown-on-error :- IFn]
 
   ;; If we were going to add any additional "debouncing" here I think it
@@ -138,7 +147,7 @@
                                      shutdown-on-error))))
 
 (schema/defn ^:always-validate schedule-watching!
-  [watchers :- (schema/atom [Watcher])
+  [watchers :- (schema/atom [(schema/protocol Watcher)])
    after :- IFn
    stopped? :- Atom
    shutdown-on-error :- IFn]

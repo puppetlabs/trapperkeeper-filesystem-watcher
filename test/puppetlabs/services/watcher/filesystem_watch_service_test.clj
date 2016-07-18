@@ -48,8 +48,8 @@
 (defn watch!
   [service root callback]
   (let [watcher (create-watcher! service)]
-    (add-watch-dir! service watcher root {:recursive true})
-    (add-callback! service watcher callback)))
+    (add-watch-dir! watcher root {:recursive true})
+    (add-callback! watcher callback)))
 
 (deftest ^:integration single-path-test
   (let [root (fs/temp-dir "single-path-test")

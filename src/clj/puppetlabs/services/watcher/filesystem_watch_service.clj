@@ -1,12 +1,9 @@
 (ns puppetlabs.services.watcher.filesystem-watch-service
   (:require [clojure.tools.logging :as log]
-            [me.raynes.fs :as fs]
             [puppetlabs.trapperkeeper.services :as tk]
             [puppetlabs.services.protocols.filesystem-watch-service :refer :all]
             [puppetlabs.services.watcher.filesystem-watch-core :as watch-core])
-  (:import (java.io IOException)
-           (java.nio.file FileSystems)
-           (com.puppetlabs DirWatchUtils)))
+  (:import (java.io IOException)))
 
 (tk/defservice filesystem-watch-service
   FilesystemWatchService
@@ -43,22 +40,6 @@
   (create-watcher!
    [this]
    (let [{:keys [watchers]} (tk/service-context this)
-         watch-service (.newWatchService (FileSystems/getDefault))
-         watcher {:watch-service watch-service
-                  :callbacks (atom [])}]
+         watcher (watch-core/create-watcher)]
      (swap! watchers conj watcher)
-     watcher))
-
-  (add-watch-dir!
-   [this watcher dir options]
-   (watch-core/validate-watch-options! options)
-   (DirWatchUtils/registerRecursive
-    (:watch-service watcher)
-    [(.toPath (fs/file dir))]))
-
-  (add-callback!
-   [this watcher callback]
-   (swap! (:callbacks watcher) conj callback)))
-
-
-
+     watcher)))
