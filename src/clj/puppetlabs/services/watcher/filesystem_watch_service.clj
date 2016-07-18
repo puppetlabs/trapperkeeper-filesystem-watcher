@@ -37,7 +37,7 @@
           (log/warn e "Exception while closing watch service"))))
     context)
 
-  (create-watcher!
+  (create-watcher
    [this]
    (let [{:keys [watchers]} (tk/service-context this)
          watcher (watch-core/create-watcher)]

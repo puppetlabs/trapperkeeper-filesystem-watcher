@@ -30,6 +30,6 @@
     changed file."))
 
 (defprotocol FilesystemWatchService
-  (create-watcher! [this]
+  (create-watcher [this]
     "Returns a Watcher which can be used to initiate watching of a directory on
     the filesystem."))

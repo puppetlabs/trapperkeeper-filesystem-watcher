@@ -47,7 +47,7 @@
 
 (defn watch!
   [service root callback]
-  (let [watcher (create-watcher! service)]
+  (let [watcher (create-watcher service)]
     (add-watch-dir! watcher root {:recursive true})
     (add-callback! watcher callback)))
 
