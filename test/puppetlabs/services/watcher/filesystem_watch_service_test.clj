@@ -60,9 +60,8 @@
         callback (make-callback results)]
     (with-app-with-config
      app watch-service-and-deps {}
-     (testing "watch-dir! can be called to initiate watching of a directory"
-       (let [service (tk-app/get-service app :FilesystemWatchService)]
-         (watch! service root callback)))
+     (let [service (tk-app/get-service app :FilesystemWatchService)]
+       (watch! service root callback))
      (testing "callback not invoked until directory changes"
        (is (= @results [])))
      (testing "callback is invoked when a new file is created"
@@ -117,10 +116,9 @@
         callback-2 (make-callback results-2)]
     (with-app-with-config
      app watch-service-and-deps {}
-     (testing "watch-dir! can be called to initiate watching of multiple directories"
-       (let [service (tk-app/get-service app :FilesystemWatchService)]
-         (watch! service root-1 callback-1)
-         (watch! service root-2 callback-2)))
+     (let [service (tk-app/get-service app :FilesystemWatchService)]
+       (watch! service root-1 callback-1)
+       (watch! service root-2 callback-2))
      (testing "callback-1 is invoked when root-1 changes"
        (spit root-1-file "foo")
        (let [events #{{:path root-1-file
@@ -157,9 +155,8 @@
     (is (fs/mkdirs nested-dir))
     (with-app-with-config
      app watch-service-and-deps {}
-     (testing "watch-dir! can be used to watch nested files/directories"
-       (let [service (tk-app/get-service app :FilesystemWatchService)]
-         (watch! service root-dir callback)))
+     (let [service (tk-app/get-service app :FilesystemWatchService)]
+       (watch! service root-dir callback))
      (testing "file creation at root dir"
        (let [test-file (fs/file root-dir "foo")]
          (spit test-file "foo")
