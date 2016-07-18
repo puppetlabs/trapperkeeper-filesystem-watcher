@@ -45,6 +45,7 @@
               (println "timed-out waiting for events")
               @dest)))))))
 
+;; TODO perhaps move this (or something similar) up to the TK protocol
 (defn watch!
   [service root callback]
   (let [watcher (create-watcher service)]
