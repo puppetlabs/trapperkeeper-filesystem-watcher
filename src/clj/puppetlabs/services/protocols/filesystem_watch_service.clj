@@ -14,16 +14,15 @@
       * :recursive true   - If true, callbacks will be invoked when dir or any
                             file underneath dir changes.
 
-    If dir is deleted, the watch is invalidated; if dir is recreated, the
-    watcher's callbacks will not be invoked unless add-watch-dir! is called
-    a second time to re-establish the watch on dir.")
+    When dir is deleted, the behavior is unspecified, left up to the
+    implementation, and may be platform-specific.")
 
   (add-callback! [this callback]
     "Adds a callback to a Watcher.  The callback will be invoked when any
     watched directories change.  The callback will be passed a sequence of
-    Events as its only argument.  The exact events are unspecified and possibly
-    platform-dependent; however, the following events are guaranteed to be
-    passed to the callback
+    Events as its only argument.  The exact events passed to the callback are
+    unspecified, left up to the implementation, and possibly platform-dependent;
+    however, the following events are guaranteed to be passed to the callback
 
      * an event of :type :create with :path p, when a file is created at path p
      * an event of :type :modify with :path p, when the contents of a file at path p are modified

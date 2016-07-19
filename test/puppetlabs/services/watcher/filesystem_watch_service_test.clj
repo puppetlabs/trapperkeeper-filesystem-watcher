@@ -249,44 +249,6 @@
                              :type :delete}}]
                (is (= events (wait-for-events results events)))))))))))
 
-(deftest ^:integration watch-dir-deletion-test
-  (let [watch-dir (fs/temp-dir "watch-dir")
-        test-file (fs/file watch-dir "test-file")
-        results (atom [])
-        callback (make-callback results)]
-    (with-app-with-config
-     app watch-service-and-deps {}
-     (let [service (tk-app/get-service app :FilesystemWatchService)
-           watcher (create-watcher service)]
-       (add-watch-dir! watcher watch-dir {:recursive true})
-       (add-callback! watcher callback)
-       (testing "Create a file, just to verify things are working"
-         (let [test-file (fs/file watch-dir "foo")]
-           (spit test-file "foo")
-           (let [events #{{:path test-file
-                           :type :create}}]
-             (is (= events (wait-for-events results events))))))
-       (reset! results [])
-       (testing "No events fired when watch-dir is deleted"
-         (is (fs/delete-dir watch-dir))
-         (Thread/sleep wait-time)
-         (is (= [] @results)))
-       (testing "Re-creating the watch-dir does not produce an event"
-         (is (fs/mkdir watch-dir))
-         (Thread/sleep wait-time)
-         (is (= [] @results)))
-       (testing "Creating a file under the re-created dir does not produce an event"
-         (spit test-file "foo")
-         (Thread/sleep wait-time)
-         (is (= [] @results)))
-       (testing "Another watch-dir can be added at the same path"
-         (add-watch-dir! watcher watch-dir {:recursive true})
-         (testing "And events will be received"
-           (spit test-file "bar")
-           (let [events #{{:path test-file
-                           :type :modify}}]
-             (is (= events (wait-for-events results events))))))))))
-
 (deftest callback-exception-shutdown-test
   (let [root-dir (fs/temp-dir "root-dir")
         error (Exception. "boom")
