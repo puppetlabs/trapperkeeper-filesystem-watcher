@@ -45,12 +45,15 @@
               (println "timed-out waiting for events")
               @dest)))))))
 
+(defn watch!*
+  [watcher root callback]
+  (add-watch-dir! watcher root {:recursive true})
+  (add-callback! watcher callback))
+
 ;; TODO perhaps move this (or something similar) up to the TK protocol
 (defn watch!
   [service root callback]
-  (let [watcher (create-watcher service)]
-    (add-watch-dir! watcher root {:recursive true})
-    (add-callback! watcher callback)))
+  (watch!* (create-watcher service) root callback))
 
 (deftest ^:integration single-path-test
   (let [root (fs/temp-dir "single-path-test")
@@ -249,7 +252,125 @@
                              :type :delete}}]
                (is (= events (wait-for-events results events)))))))))))
 
-(deftest callback-exception-shutdown-test
+(deftest ^:integration multiple-watch-dirs-test
+  (testing "Watching of multiple directories using a single watcher"
+    (with-app-with-config
+     app watch-service-and-deps {}
+     (let [service (tk-app/get-service app :FilesystemWatchService)
+           watcher (create-watcher service)
+           results (atom [])
+           callback (make-callback results)
+           dir-1 (fs/temp-dir "dir-1")
+           dir-2 (fs/temp-dir "dir-2")
+           test-file-1 (fs/file dir-1 "test-file")
+           test-file-2 (fs/file dir-2 "test-file")]
+       (add-watch-dir! watcher dir-1 {:recursive true})
+       (add-watch-dir! watcher dir-2 {:recursive true})
+       (add-callback! watcher callback)
+       (testing "Events in dir-1"
+         (spit test-file-1 "foo")
+         (let [events #{{:path test-file-1
+                         :type :create}}]
+           (is (= events (wait-for-events results events)))))
+       (reset! results [])
+       (testing "Events in dir-2"
+         (spit test-file-2 "foo")
+         (let [events #{{:path test-file-2
+                         :type :create}}]
+           (is (= events (wait-for-events results events)))))
+       (reset! results [])
+       (testing "Events in both dirs"
+         (spit test-file-1 "bar")
+         (spit test-file-2 "bar")
+         (let [events #{{:path test-file-1
+                         :type :modify}
+                        {:path test-file-2
+                         :type :modify}}]
+           (is (= events (wait-for-events results events)))))
+       (reset! results [])
+       (testing "Nested watch directories"
+         (let [nested-dir (fs/file dir-1 "nested-dir")
+               test-file-nested (fs/file nested-dir "test-file")]
+           (is (fs/mkdir nested-dir))
+           (add-watch-dir! watcher nested-dir {:recursive true})
+           (spit test-file-nested "foo")
+           (let [events #{{:path nested-dir
+                           :type :create}
+                          {:path test-file-nested
+                           :type :create}}]
+             (is (= events (wait-for-events results events))))
+           (reset! results [])
+           (testing "Events in all three directories"
+             (spit test-file-1 "baz")
+             (spit test-file-2 "baz")
+             (spit test-file-nested "baz")
+             (let [events #{{:path test-file-1
+                             :type :modify}
+                            {:path test-file-2
+                             :type :modify}
+                            {:path test-file-nested
+                             :type :modify}}]
+               (is (= events (wait-for-events results events)))))
+           (reset! results [])
+           (testing "Deletion thereof"
+             (is (fs/delete-dir nested-dir))
+             (let [events #{{:path nested-dir
+                             :type :delete}}]
+               (is (= events (wait-for-events results events))))
+             (reset! results [])
+             (testing "Leaves the parent watched dir unaffected"
+               (spit test-file-1 "bamboozle")
+               (let [events #{{:path test-file-1
+                               :type :modify}}]
+                 (is (= events (wait-for-events results events))))))))))))
+
+(deftest ^:integration multiple-watcher-test
+  (testing "Multiple watchers"
+    (with-app-with-config
+     app watch-service-and-deps {}
+     (let [service (tk-app/get-service app :FilesystemWatchService)
+           watcher-1 (create-watcher service)
+           watcher-2 (create-watcher service)
+           results-1 (atom [])
+           callback-1 (make-callback results-1)
+           results-2 (atom [])
+           callback-2 (make-callback results-2)
+           dir-1 (fs/temp-dir "dir-1")
+           dir-2 (fs/temp-dir "dir-2")
+           test-file-1 (fs/file dir-1 "test-file")
+           test-file-2 (fs/file dir-2 "test-file")]
+       (testing "Watching separate directories"
+         (watch!* watcher-1 dir-1 callback-1)
+         (watch!* watcher-2 dir-2 callback-2)
+         (testing "Events do not bleed over between watchers"
+           (spit test-file-1 "foo")
+           (spit test-file-2 "foo")
+           (let [events-1 #{{:path test-file-1
+                             :type :create}}
+                 events-2 #{{:path test-file-2
+                             :type :create}}]
+             (is (= events-1 (wait-for-events results-1 events-1)))
+             (is (= events-2 (wait-for-events results-2 events-2))))))
+       (testing "Watching the same directory"
+         (reset! results-1 [])
+         (reset! results-2 [])
+         ;; Create a third watcher
+         (let [watcher-3 (create-watcher service)
+               results-3 (atom [])
+               callback-3 (make-callback results-3)]
+           ;; ... and tell it to watch the same directory as the first one.
+           (watch!* watcher-3 dir-1 callback-3)
+           (spit test-file-1 "bar")
+           (spit test-file-2 "bar")
+           (let [events-1 #{{:path test-file-1
+                             :type :modify}}
+                 events-2 #{{:path test-file-2
+                             :type :modify}}]
+             (is (= events-1 (wait-for-events results-1 events-1)))
+             (is (= events-1 (wait-for-events results-3 events-1)))
+             (is (= events-2 (wait-for-events results-2 events-2))))))))))
+
+(deftest ^:integration callback-exception-shutdown-test
   (let [root-dir (fs/temp-dir "root-dir")
         error (Exception. "boom")
         callback (fn [& _] (throw error))]
