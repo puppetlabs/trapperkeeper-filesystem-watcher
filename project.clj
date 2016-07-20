@@ -20,15 +20,20 @@
                  [puppetlabs/trapperkeeper-scheduler "0.0.1"]
                  [puppetlabs/i18n "0.4.1"]]
 
-  :plugins [[lein-release "1.0.5"]]
-
-  :lein-release {:scm         :git
-                 :deploy-via  :lein-deploy}
-
   :deploy-repositories [["releases" {:url "https://clojars.org/repo"
                                      :username :env/clojars_jenkins_username
                                      :password :env/clojars_jenkins_password
                                      :sign-releases false}]]
+
+  :source-paths ["src/clj"]
+  :java-source-paths ["src/java"]
+
+  :profiles {:dev {:dependencies [[puppetlabs/trapperkeeper ~tk-version
+                                   :classifier "test"
+                                   :scope "test"]
+                                  [puppetlabs/kitchensink ~ks-version
+                                   :classifier "test"
+                                   :scope "test"]]}}
 
   :main puppetlabs.trapperkeeper.main
 )
