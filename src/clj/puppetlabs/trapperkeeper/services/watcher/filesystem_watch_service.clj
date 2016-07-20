@@ -1,8 +1,8 @@
-(ns puppetlabs.services.watcher.filesystem-watch-service
+(ns puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service
   (:require [clojure.tools.logging :as log]
             [puppetlabs.trapperkeeper.services :as tk]
-            [puppetlabs.services.protocols.filesystem-watch-service :refer :all]
-            [puppetlabs.services.watcher.filesystem-watch-core :as watch-core])
+            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer :all]
+            [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-core :as watch-core])
   (:import (java.io IOException)))
 
 (tk/defservice filesystem-watch-service

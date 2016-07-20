@@ -1,10 +1,10 @@
-(ns puppetlabs.services.watcher.filesystem-watch-core
+(ns puppetlabs.trapperkeeper.services.watcher.filesystem-watch-core
   (:require [clojure.tools.logging :as log]
             [me.raynes.fs :as fs]
             [schema.core :as schema]
             [puppetlabs.i18n.core :refer [trs]]
             [puppetlabs.kitchensink.core :as ks]
-            [puppetlabs.services.protocols.filesystem-watch-service :refer [Event Watcher]])
+            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [Event Watcher]])
   (:import (clojure.lang Atom IFn)
            (java.nio.file StandardWatchEventKinds Path WatchEvent FileSystems)
            (com.puppetlabs DirWatchUtils)))

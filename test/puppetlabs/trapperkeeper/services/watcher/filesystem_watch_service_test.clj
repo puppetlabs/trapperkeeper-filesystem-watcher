@@ -1,10 +1,10 @@
-(ns puppetlabs.services.watcher.filesystem-watch-service-test
+(ns puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service-test
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
             [clojure.set :as set]
             [schema.test :as schema-test]
             [me.raynes.fs :as fs]
-            [puppetlabs.services.protocols.filesystem-watch-service :refer :all]
-            [puppetlabs.services.watcher.filesystem-watch-service :refer [filesystem-watch-service]]
+            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer :all]
+            [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service :refer [filesystem-watch-service]]
             [puppetlabs.trapperkeeper.services.scheduler.scheduler-service :refer [scheduler-service]]
             [puppetlabs.trapperkeeper.testutils.bootstrap :refer [with-app-with-config]]
             [puppetlabs.trapperkeeper.testutils.logging :refer [with-test-logging]]
