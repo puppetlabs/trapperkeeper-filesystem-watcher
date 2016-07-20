@@ -119,7 +119,7 @@
            (let [events #{{:path sub-dir
                            :type :delete}}]
              (is (= events (wait-for-events results events)))))
-         (testing "Re-creating the directory fires an event as expcted"
+         (testing "Re-creating the directory fires an event as expected"
            (is (fs/mkdir sub-dir))
            (let [events #{{:path sub-dir
                            :type :create}}]
