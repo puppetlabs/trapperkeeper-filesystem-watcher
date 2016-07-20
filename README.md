@@ -4,6 +4,12 @@ This library includes a [Trapperkeeper](https://github.com/puppetlabs/trapperkee
 service which provides an API for watching paths on the filesystem for changes
 and doing something when they change.
 
+## Usage
+
+Add the following dependency to your project.clj file:
+
+[![Clojars Project](https://img.shields.io/clojars/v/puppetlabs/trapperkeeper-filesystem-watcher.svg)](https://clojars.org/puppetlabs/trapperkeeper-filesystem-watcher)
+
 ## Development
 
 The service implementation in this repository is based on java.nio's
