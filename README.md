@@ -12,6 +12,8 @@ Add the following dependency to your project.clj file:
 
 ## Development
 
+[![Build Status](https://travis-ci.org/puppetlabs/trapperkeeper-filesystem-watcher.svg?branch=master)](https://travis-ci.org/puppetlabs/trapperkeeper-filesystem-watcher)
+
 The service implementation in this repository is based on java.nio's
 [`WatchService`](https://docs.oracle.com/javase/8/docs/api/java/nio/file/WatchService.html).
 The default implementation of that interface varies drastically in behavior
