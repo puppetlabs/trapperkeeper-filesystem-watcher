@@ -7,21 +7,15 @@
 
 (tk/defservice filesystem-watch-service
   FilesystemWatchService
-  [[:SchedulerService after]
-   [:ShutdownService shutdown-on-error]]
+  [[:ShutdownService shutdown-on-error]]
 
   (init
     [this context]
-    {:watchers (atom [])
+    {:watchers (atom {})
      :stopped? (atom false)})
 
   (start
     [this context]
-    (let [{:keys [watchers stopped?]} context]
-      (watch-core/schedule-watching! watchers
-                                     after
-                                     stopped?
-                                     (partial shutdown-on-error (tk/service-id this))))
     context)
 
   (stop
@@ -30,7 +24,7 @@
     ;; the filesystem for changes and terminate.
     (reset! (:stopped? context) true)
     ;; Shut down the WatchServices
-    (doseq [watcher @(:watchers context)]
+    (doseq [[watcher _] @(:watchers context)]
       (try
         (.close (:watch-service watcher))
         (catch IOException e
@@ -39,7 +33,14 @@
 
   (create-watcher
    [this]
-   (let [{:keys [watchers]} (tk/service-context this)
+   (let [{:keys [watchers stopped?]} (tk/service-context this)
          watcher (watch-core/create-watcher)]
-     (swap! watchers conj watcher)
+     (swap!
+       watchers
+       merge
+       {watcher
+        (watch-core/watch!
+          watcher
+          stopped?
+          (partial shutdown-on-error (tk/service-id this)))})
      watcher)))
