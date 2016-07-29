@@ -30,9 +30,11 @@
   [event :- WatchEvent
    watch-path :- Path]
   {:type (get event-type-mappings (.kind event))
-   :path (-> watch-path
-             (.resolve (.context event))
-             fs/file)})
+   :path (if (= StandardWatchEventKinds/OVERFLOW (.kind event))
+           (fs/file (.resolve watch-path "UNKNOWN"))
+           (-> watch-path
+               (.resolve (.context event))
+               fs/file))})
 
 ;; This is quite similar to the function above but it is more a direct
 ;; conversion of the exact data available on a specific WatchEvent instance,
