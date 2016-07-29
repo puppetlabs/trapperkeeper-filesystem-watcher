@@ -387,20 +387,19 @@
             :error))))))
 
 (deftest ^:integration overflow-test
-  (let  [watch-dir  (fs/temp-dir "overflow")
-        results  (atom  [])
-        callback  (fn  [events]  (swap! results concat events))]
+  (let [watch-dir (fs/temp-dir "overflow")
+        results (atom [])
+        callback (make-callback results)]
     (with-app-with-config
-     app watch-service-and-deps  {}
-     (let  [service  (tk-app/get-service app :FilesystemWatchService)]
+     app watch-service-and-deps {}
+     (let [service (tk-app/get-service app :FilesystemWatchService)]
        (watch! service watch-dir callback))
      ;; From experimenting the buffer seems to fill at 512 events.
      ;; However the number of events varies by operating system.
-     (let  [files  (for  [n  (range 1000)]
+     (let [files (for [n (range 1000)]
                    (fs/file watch-dir  (str n ".txt")))]
-       (doseq  [f files]
+       (doseq [f files]
          (spit f "file content"))
       (let [events #{{:type :unknown
-                      :path (fs/file watch-dir "UNKNOWN")}}]
-        (spit (fs/file watch-dir "observed.txt") "file content")
+                      :path nil}}]
         (is (= events (wait-for-events results events))))))))

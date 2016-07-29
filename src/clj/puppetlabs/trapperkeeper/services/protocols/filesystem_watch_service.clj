@@ -4,8 +4,11 @@
 
 (def Event
   "Schema for an event on a file watched by this service."
-  {:type (schema/enum :create :modify :delete :unknown)
-   :path File})
+  (schema/if #(= (:type %) :unknown)
+    {:type (schema/eq :unknown)
+     :path (schema/eq nil)}
+    {:type (schema/enum :create :modify :delete)
+     :path File}))
 
 (defprotocol Watcher
   (add-watch-dir! [this dir options]
