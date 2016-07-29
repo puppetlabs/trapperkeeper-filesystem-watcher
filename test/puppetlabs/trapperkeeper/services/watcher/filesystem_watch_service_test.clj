@@ -400,15 +400,7 @@
                    (fs/file watch-dir  (str n ".txt")))]
        (doseq  [f files]
          (spit f "file content"))
-       (let  [events  (set  (map  (fn  [f]
-                                    {:type :create
-                                     :path f})
-                                  files))]
-          ;; Block for the standard wait period which should be sufficient that
-          ;; any polling interval has been reset and we won't add to an overflow
-          ;; event with our next file creation.
-          (java.lang.Thread/sleep (long wait-time)))
-      (let [events #{{:type :create
-                      :path (fs/file watch-dir "observed.txt")}}]
+      (let [events #{{:type :unknown
+                      :path (fs/file watch-dir "UNKNOWN")}}]
         (spit (fs/file watch-dir "observed.txt") "file content")
         (is (= events (wait-for-events results events))))))))
