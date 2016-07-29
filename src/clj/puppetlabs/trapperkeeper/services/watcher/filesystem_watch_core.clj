@@ -21,6 +21,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Functions
+;;;
+;;; Helper functions in this namespace are heavily influenced by WatchDir.java
+;;; from Java's official documentation:
+;;; https://docs.oracle.com/javase/tutorial/essential/io/notification.html
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (schema/defn clojurize :- Event
@@ -88,29 +92,22 @@
    shutdown-on-error :- IFn]
   (future
     (while (not @stopped?)
-      ;; `.take` here will block until there has been an event for this key
-      ;;
-      ;; If `.close` is called on the `WatchService` while blocking on
-      ;; `.take` a `ClosedWatchServiceException` will be raised.
-      ;; The `WatchKey` will then be invalidated, so `.reset` will return
-      ;; false, but enqueued events will still be available via `.pollEvents`
-      ;; and `.watchable` should continue to function as desired.
-      (let [watch-key (try
-                        (.take (:watch-service watcher))
-                        (catch ClosedWatchServiceException e
-                          (log/info (trs "Closing watcher {0}" watcher))))
-            orig-events (.pollEvents watch-key)
-            events (map #(clojurize % (.watchable watch-key)) orig-events)
-            callbacks @(:callbacks watcher)]
-        (when-not (empty? events)
-          (log/info (trs "Got {0} event(s) for watched-path {1}"
-                         (count orig-events) (.watchable watch-key)))
-          (log/debug (trs "Events:\n{0}"
-                          (pprint-events events)))
-          (log/trace (trs "orig-events:\n{0}"
-                          (ks/pprint-to-string (map clojurize-for-logging orig-events))))
-          (shutdown-on-error #(doseq [callback callbacks]
-                               (callback events)))
-          (watch-new-directories! events watcher)
-          (.reset watch-key))))))
+      (try
+        (let [watch-key (.take (:watch-service watcher))
+              orig-events (.pollEvents watch-key)
+              events (map #(clojurize % (.watchable watch-key)) orig-events)
+              callbacks @(:callbacks watcher)]
+          (when-not (empty? events)
+            (log/info (trs "Got {0} event(s) for watched-path {1}"
+                           (count orig-events) (.watchable watch-key)))
+            (log/debug (trs "Events:\n{0}"
+                            (pprint-events events)))
+            (log/trace (trs "orig-events:\n{0}"
+                            (ks/pprint-to-string (map clojurize-for-logging orig-events))))
+            (shutdown-on-error #(doseq [callback callbacks]
+                                  (callback events)))
+            (watch-new-directories! events watcher)
+            (.reset watch-key)))
+       (catch ClosedWatchServiceException e
+         (log/info (trs "Closing watcher {0}" watcher)))))))
 
