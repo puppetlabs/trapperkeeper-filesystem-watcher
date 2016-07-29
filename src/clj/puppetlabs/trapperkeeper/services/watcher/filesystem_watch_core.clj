@@ -30,8 +30,7 @@
   [event :- WatchEvent
    watch-path :- Path]
   {:type (get event-type-mappings (.kind event))
-   :path (if (= StandardWatchEventKinds/OVERFLOW (.kind event))
-           nil
+   :path (when-not (= StandardWatchEventKinds/OVERFLOW (.kind event))
            (-> watch-path
                (.resolve (.context event))
                fs/file))})
