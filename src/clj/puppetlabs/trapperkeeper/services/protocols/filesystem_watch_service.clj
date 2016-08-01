@@ -6,7 +6,7 @@
   "Schema for an event on a file watched by this service."
   (schema/if #(= (:type %) :unknown)
     {:type (schema/eq :unknown)
-     :path (schema/eq nil)}
+     :path (schema/pred nil?)}
     {:type (schema/enum :create :modify :delete)
      :path File}))
 
