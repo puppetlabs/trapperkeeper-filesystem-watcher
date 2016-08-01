@@ -102,13 +102,13 @@
             (when-not (empty? events)
               (log/info (trs "Got {0} event(s) for watched-path {1}"
                              (count orig-events) (.watchable watch-key)))
-              (log/debug (format "%s\n%s"
-                                 (trs "Events:")
-                                 (pprint-events events)))
-              (log/trace (format "%s\n%s"
-                                 (trs "orig-events:")
-                                 (ks/pprint-to-string
-                                   (map clojurize-for-logging orig-events))))
+              (log/debugf "%s\n%s"
+                          (trs "Events:")
+                          (pprint-events events))
+              (log/tracef "%s\n%s"
+                          (trs "orig-events:")
+                          (ks/pprint-to-string
+                            (map clojurize-for-logging orig-events)))
               (shutdown-on-error #(doseq [callback callbacks]
                                     (callback events)))
               (watch-new-directories! events watcher)
