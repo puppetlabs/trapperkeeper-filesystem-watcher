@@ -10,6 +10,25 @@ Add the following dependency to your project.clj file:
 
 [![Clojars Project](https://img.shields.io/clojars/v/puppetlabs/trapperkeeper-filesystem-watcher.svg)](https://clojars.org/puppetlabs/trapperkeeper-filesystem-watcher)
 
+## Warning
+
+There is a [bug](https://bugs.openjdk.java.net/browse/JDK-8145981) in most
+released versions of OpenJDK on Linux that affect the behavior of this library.
+
+#### [tl;dr](http://blog.omega-prime.co.uk/?p=161)
+Registering new watch paths while receiving incoming events can cause the event
+path to be misreported.
+
+We encourage users to register all watch paths at start up prior to any
+expected events occuring. Currently only recursive file watching is supported,
+this means we will register any directory created by the user within an
+existing watch path. Thus creating a directory and then immediately creating
+a file or directory within the new directory will often trigger this issue.
+
+See the above linked ticket and blog post for comprehensive info, as well as
+[TK-387](https://tickets.puppetlabs.com/browse/TK-387) for our discussion
+around this topic.
+
 ## Development
 
 [![Build Status](https://travis-ci.org/puppetlabs/trapperkeeper-filesystem-watcher.svg?branch=master)](https://travis-ci.org/puppetlabs/trapperkeeper-filesystem-watcher)
