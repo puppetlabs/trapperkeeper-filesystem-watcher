@@ -53,7 +53,9 @@
 (defn validate-watch-options!
   [options]
   (when-not (= true (:recursive options))
-    (throw (IllegalArgumentException.(trs "Support for non-recursive directory watching not yet implemented")))))
+    (throw
+      (IllegalArgumentException.
+        (trs "Support for non-recursive directory watching not yet implemented")))))
 
 (defrecord WatcherImpl
   [watch-service callbacks]
@@ -69,8 +71,9 @@
 
 (defn create-watcher
   []
-  (map->WatcherImpl {:watch-service (.newWatchService (FileSystems/getDefault))
-                     :callbacks (atom [])}))
+  (map->WatcherImpl
+    {:watch-service (.newWatchService (FileSystems/getDefault))
+     :callbacks (atom [])}))
 
 (schema/defn watch-new-directories!
   [events :- [Event]
@@ -102,7 +105,8 @@
               (log/debug (trs "Events:\n{0}"
                               (pprint-events events)))
               (log/trace (trs "orig-events:\n{0}"
-                              (ks/pprint-to-string (map clojurize-for-logging orig-events))))
+                              (ks/pprint-to-string
+                                (map clojurize-for-logging orig-events))))
               (shutdown-on-error #(doseq [callback callbacks]
                                     (callback events)))
               (watch-new-directories! events watcher)
