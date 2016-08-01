@@ -11,12 +11,12 @@
 
   (init
     [this context]
-    {:watchers (atom {})})
+    {:watchers (atom [])})
 
   (stop
     [this context]
     ;; Shut down the WatchServices
-    (doseq [[watcher _] @(:watchers context)]
+    (doseq [watcher @(:watchers context)]
       (try
         (.close (:watch-service watcher))
         (catch IOException e
@@ -26,12 +26,8 @@
   (create-watcher
    [this]
    (let [{:keys [watchers]} (tk/service-context this)
-         watcher (watch-core/create-watcher)]
-     (swap!
-       watchers
-       merge
-       {watcher
-        (watch-core/watch!
-          watcher
-          (partial shutdown-on-error (tk/service-id this)))})
+         watcher (watch-core/create-watcher)
+         shutdown-fn (partial shutdown-on-error (tk/service-id this))]
+     (watch-core/watch! watcher shutdown-fn)
+     (swap! watchers conj watcher)
      watcher)))
