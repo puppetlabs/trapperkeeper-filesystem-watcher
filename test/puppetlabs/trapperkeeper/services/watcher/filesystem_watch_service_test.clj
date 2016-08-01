@@ -394,3 +394,21 @@
        (is (logged?
             #"shutdown-on-error triggered because of exception"
             :error))))))
+
+(deftest ^:integration overflow-test
+  (let [watch-dir (fs/temp-dir "overflow")
+        results (atom [])
+        callback (make-callback results)]
+    (with-app-with-config
+     app watch-service-and-deps {}
+     (let [service (tk-app/get-service app :FilesystemWatchService)]
+       (watch! service watch-dir callback))
+     ;; From experimenting the buffer seems to fill at 512 events.
+     ;; However the number of events varies by operating system.
+     ;; Once the buffer overflows we cannot reliably receive any other
+     ;; kind of event.
+     (dotimes [n 1000]
+       (spit (format "%s/%s.txt" watch-dir n) "file content"))
+     (let [events #{{:type :unknown
+                     :path nil}}]
+       (is (= events (wait-for-events results events)))))))
