@@ -13,10 +13,6 @@
     [this context]
     {:watchers (atom {})})
 
-  (start
-    [this context]
-    context)
-
   (stop
     [this context]
     ;; Shut down the WatchServices
