@@ -84,30 +84,30 @@
                                           (map #(.toPath (:path %)))))))
 
 (schema/defn watch!
-  "Returns a future representing processing events for the passed in watcher.
-  The future will swallow errors, loop producing side-effects until stopped,
-  and is expected to coordinate with other functions via the stopped? atom."
+  "Creates a future and processes events for the passed in watcher.
+  The future will continue until the underlying WatchService is closed."
   [watcher :- (schema/protocol Watcher)
-   stopped? :- Atom
    shutdown-on-error :- IFn]
   (future
-    (while (not @stopped?)
-      (try
-        (let [watch-key (.take (:watch-service watcher))
-              orig-events (.pollEvents watch-key)
-              events (map #(clojurize % (.watchable watch-key)) orig-events)
-              callbacks @(:callbacks watcher)]
-          (when-not (empty? events)
-            (log/info (trs "Got {0} event(s) for watched-path {1}"
-                           (count orig-events) (.watchable watch-key)))
-            (log/debug (trs "Events:\n{0}"
-                            (pprint-events events)))
-            (log/trace (trs "orig-events:\n{0}"
-                            (ks/pprint-to-string (map clojurize-for-logging orig-events))))
-            (shutdown-on-error #(doseq [callback callbacks]
-                                  (callback events)))
-            (watch-new-directories! events watcher)
-            (.reset watch-key)))
-       (catch ClosedWatchServiceException e
-         (log/info (trs "Closing watcher {0}" watcher)))))))
+    (let [stopped? (atom false)]
+      (while (not @stopped?)
+        (try
+          (let [watch-key (.take (:watch-service watcher))
+                orig-events (.pollEvents watch-key)
+                events (map #(clojurize % (.watchable watch-key)) orig-events)
+                callbacks @(:callbacks watcher)]
+            (when-not (empty? events)
+              (log/info (trs "Got {0} event(s) for watched-path {1}"
+                             (count orig-events) (.watchable watch-key)))
+              (log/debug (trs "Events:\n{0}"
+                              (pprint-events events)))
+              (log/trace (trs "orig-events:\n{0}"
+                              (ks/pprint-to-string (map clojurize-for-logging orig-events))))
+              (shutdown-on-error #(doseq [callback callbacks]
+                                    (callback events)))
+              (watch-new-directories! events watcher)
+              (.reset watch-key)))
+         (catch ClosedWatchServiceException e
+           (reset! stopped? true)
+           (log/info (trs "Closing watcher {0}" watcher))))))))
 

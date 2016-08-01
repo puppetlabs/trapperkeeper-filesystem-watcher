@@ -11,8 +11,7 @@
 
   (init
     [this context]
-    {:watchers (atom {})
-     :stopped? (atom false)})
+    {:watchers (atom {})})
 
   (start
     [this context]
@@ -20,9 +19,6 @@
 
   (stop
     [this context]
-    ;; This signals to the background thread that it should stop polling
-    ;; the filesystem for changes and terminate.
-    (reset! (:stopped? context) true)
     ;; Shut down the WatchServices
     (doseq [[watcher _] @(:watchers context)]
       (try
@@ -33,7 +29,7 @@
 
   (create-watcher
    [this]
-   (let [{:keys [watchers stopped?]} (tk/service-context this)
+   (let [{:keys [watchers]} (tk/service-context this)
          watcher (watch-core/create-watcher)]
      (swap!
        watchers
@@ -41,6 +37,5 @@
        {watcher
         (watch-core/watch!
           watcher
-          stopped?
           (partial shutdown-on-error (tk/service-id this)))})
      watcher)))
