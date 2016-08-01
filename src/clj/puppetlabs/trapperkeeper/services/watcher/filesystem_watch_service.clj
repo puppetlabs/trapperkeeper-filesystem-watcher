@@ -1,5 +1,6 @@
 (ns puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service
   (:require [clojure.tools.logging :as log]
+            [puppetlabs.i18n.core :refer [trs]]
             [puppetlabs.trapperkeeper.services :as tk]
             [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer :all]
             [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-core :as watch-core])
@@ -20,7 +21,7 @@
       (try
         (.close (:watch-service watcher))
         (catch IOException e
-          (log/warn e "Exception while closing watch service"))))
+          (log/warn e (trs "Exception while closing watch service")))))
     context)
 
   (create-watcher
