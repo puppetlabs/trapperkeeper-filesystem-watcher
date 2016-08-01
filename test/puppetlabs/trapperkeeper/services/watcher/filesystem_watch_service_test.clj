@@ -293,6 +293,14 @@
                test-file-nested (fs/file nested-dir "test-file")]
            (is (fs/mkdir nested-dir))
            (add-watch-dir! watcher nested-dir {:recursive true})
+           ;; There is a bug in the JDK in which we misreport the changed
+           ;; path if we are trying to register a new watch path when an event
+           ;; comes in. This sleep allows us to finish registering the
+           ;; directory before the CREATE event will come in. We are ignoring
+           ;; this for the time being as the current consumer will take the
+           ;; same action regardless of the path. See
+           ;; https://tickets.puppetlabs.com/browse/TK-387 for more details.
+           (Thread/sleep 100)
            (spit test-file-nested "foo")
            (let [events #{{:path nested-dir
                            :type :create}
