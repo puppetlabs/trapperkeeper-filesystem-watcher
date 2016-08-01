@@ -396,10 +396,10 @@
        (watch! service watch-dir callback))
      ;; From experimenting the buffer seems to fill at 512 events.
      ;; However the number of events varies by operating system.
-     (let [files (for [n (range 1000)]
-                   (fs/file watch-dir  (str n ".txt")))]
-       (doseq [f files]
-         (spit f "file content"))
-      (let [events #{{:type :unknown
-                      :path nil}}]
-        (is (= events (wait-for-events results events))))))))
+     ;; Once the buffer overflows we cannot reliably receive any other
+     ;; kind of event.
+     (dotimes [n 1000]
+       (spit (format "%s/%s.txt" watch-dir n) "file content"))
+     (let [events #{{:type :unknown
+                     :path nil}}]
+       (is (= events (wait-for-events results events)))))))
