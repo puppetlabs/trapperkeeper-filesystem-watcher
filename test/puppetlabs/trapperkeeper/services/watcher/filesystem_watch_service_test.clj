@@ -396,6 +396,9 @@
             #"shutdown-on-error triggered because of exception"
             :error))))))
 
+;; Here we create a stub object that implements the WatchEvent interface as
+;; the concrete class is a private inner class. See:
+;; https://github.com/openjdk-mirror/jdk7u-jdk/blob/f4d80957e89a19a29bb9f9807d2a28351ed7f7df/src/share/classes/sun/nio/fs/AbstractWatchKey.java#L190-L222
 (def overflow-event
   (reify
     java.nio.file.WatchEvent
@@ -403,18 +406,20 @@
     (count [this] 1)
     (context [this] nil)))
 
-(deftest process-events-handles-overflows-correctly
-  (let [watch-path (.toPath (fs/temp-dir "process-overflows"))
-        watcher (watch-core/create-watcher)
-        watch-key (.register
-                    watch-path
-                    (:watch-service watcher)
-                    (into-array [java.nio.file.StandardWatchEventKinds/ENTRY_CREATE]))
-        events [overflow-event]
-        actual (atom [])
-        expected #{{:type :unknown :path nil}}
-        callback (make-callback actual)]
-    (with-test-logging
-      (add-callback! watcher callback)
-      (watch-core/process-events watcher watch-key events #(%))
-      (is (= expected (wait-for-events actual expected))))))
+(deftest process-overflows
+  (testing "process-events!"
+    (let [watch-path (.toPath (fs/temp-dir "process-overflows"))
+          watcher (watch-core/create-watcher)
+          watch-key (.register
+                      watch-path
+                      (:watch-service watcher)
+                      (into-array [java.nio.file.StandardWatchEventKinds/ENTRY_CREATE]))
+          events [overflow-event]
+          actual (atom [])
+          expected #{{:type :unknown :path nil}}
+          callback (make-callback actual)]
+      (testing "overflow events are handled normally"
+        (with-test-logging
+          (add-callback! watcher callback)
+          (watch-core/process-events! watcher watch-key events (fn [func] (func)))
+          (is (= expected (wait-for-events actual expected))))))))

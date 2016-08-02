@@ -6,7 +6,7 @@
             [puppetlabs.kitchensink.core :as ks]
             [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [Event Watcher]])
   (:import (clojure.lang Atom IFn)
-           (java.nio.file StandardWatchEventKinds Path WatchEvent FileSystems ClosedWatchServiceException)
+           (java.nio.file StandardWatchEventKinds Path WatchEvent WatchKey FileSystems ClosedWatchServiceException)
            (com.puppetlabs DirWatchUtils)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -87,25 +87,31 @@
                                           (filter dir-create?)
                                           (map #(.toPath (:path %)))))))
 
-(defn retrieve-events
-  [watcher]
+(schema/defn retrieve-events
+  "Blocks until an event the watcher is concerned with has occured.
+  Returns the native WatchKey and WatchEvents"
+  [watcher :- (schema/protocol Watcher)]
   (let [watch-key (.take (:watch-service watcher))
         events (.pollEvents watch-key)]
     [watch-key events]))
 
-(defn process-events
-  [watcher watch-key java-events shutdown-fn]
-  (let [clojure-events (map #(clojurize % (.watchable watch-key)) java-events)
+(schema/defn process-events!
+  "Process for side-effects any events that occured for watcher's watch-key"
+  [watcher :- (schema/protocol Watcher)
+   watch-key :- WatchKey
+   orig-events :- [WatchEvent]
+   shutdown-fn :- IFn]
+  (let [clojure-events (map #(clojurize % (.watchable watch-key)) orig-events)
         callbacks @(:callbacks watcher)]
     (log/info (trs "Got {0} event(s) for watched-path {1}"
-                   (count java-events) (.watchable watch-key)))
+                   (count orig-events) (.watchable watch-key)))
     (log/debugf "%s\n%s"
                 (trs "Events:")
                 (pprint-events clojure-events))
     (log/tracef "%s\n%s"
                 (trs "orig-events:")
                 (ks/pprint-to-string
-                  (map clojurize-for-logging java-events)))
+                  (map clojurize-for-logging orig-events)))
     (shutdown-fn #(doseq [callback callbacks]
                    (callback clojure-events)))
     (watch-new-directories! clojure-events watcher)
@@ -122,7 +128,7 @@
         (try
           (let [[watch-key events] (retrieve-events watcher)]
             (when-not (empty? events)
-              (process-events watcher watch-key events shutdown-fn)))
+              (process-events! watcher watch-key events shutdown-fn)))
          (catch ClosedWatchServiceException e
            (reset! stopped? true)
            (log/info (trs "Closing watcher {0}" watcher))))))))
