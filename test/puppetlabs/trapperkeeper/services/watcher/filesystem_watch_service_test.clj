@@ -419,7 +419,6 @@
           expected #{{:type :unknown :path nil}}
           callback (make-callback actual)]
       (testing "overflow events are handled normally"
-        (with-test-logging
-          (add-callback! watcher callback)
-          (watch-core/process-events! watcher watch-key events (fn [func] (func)))
-          (is (= expected (wait-for-events actual expected))))))))
+        (add-callback! watcher callback)
+        (watch-core/process-events! watcher watch-key events (fn [func] (func)))
+        (is (= expected (wait-for-events actual expected)))))))
