@@ -88,6 +88,7 @@
                                           (map #(.toPath (:path %)))))))
 
 (schema/defn retrieve-events
+  :- [(schema/one WatchKey "key") (schema/one [WatchEvent] "events")]
   "Blocks until an event the watcher is concerned with has occured.
   Returns the native WatchKey and WatchEvents"
   [watcher :- (schema/protocol Watcher)]
