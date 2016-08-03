@@ -94,6 +94,7 @@
   [watcher :- (schema/protocol Watcher)]
   (let [watch-key (.take (:watch-service watcher))
         events (.pollEvents watch-key)]
+    (.reset watch-key)
     [watch-key events]))
 
 (schema/defn process-events!
@@ -115,8 +116,7 @@
                   (map clojurize-for-logging orig-events)))
     (shutdown-fn #(doseq [callback callbacks]
                    (callback clojure-events)))
-    (watch-new-directories! clojure-events watcher)
-    (.reset watch-key)))
+    (watch-new-directories! clojure-events watcher)))
 
 (schema/defn watch!
   "Creates a future and processes events for the passed in watcher.
