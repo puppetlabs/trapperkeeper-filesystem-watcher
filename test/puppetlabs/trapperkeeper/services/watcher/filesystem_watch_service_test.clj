@@ -5,6 +5,7 @@
             [me.raynes.fs :as fs]
             [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer :all]
             [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service :refer [filesystem-watch-service]]
+            [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-core :as watch-core]
             [puppetlabs.trapperkeeper.services.scheduler.scheduler-service :refer [scheduler-service]]
             [puppetlabs.trapperkeeper.testutils.bootstrap :refer [with-app-with-config]]
             [puppetlabs.trapperkeeper.testutils.logging :refer [with-test-logging]]
@@ -395,20 +396,29 @@
             #"shutdown-on-error triggered because of exception"
             :error))))))
 
-(deftest ^:integration overflow-test
-  (let [watch-dir (fs/temp-dir "overflow")
-        results (atom [])
-        callback (make-callback results)]
-    (with-app-with-config
-     app watch-service-and-deps {}
-     (let [service (tk-app/get-service app :FilesystemWatchService)]
-       (watch! service watch-dir callback))
-     ;; From experimenting the buffer seems to fill at 512 events.
-     ;; However the number of events varies by operating system.
-     ;; Once the buffer overflows we cannot reliably receive any other
-     ;; kind of event.
-     (dotimes [n 1000]
-       (spit (format "%s/%s.txt" watch-dir n) "file content"))
-     (let [events #{{:type :unknown
-                     :path nil}}]
-       (is (= events (wait-for-events results events)))))))
+;; Here we create a stub object that implements the WatchEvent interface as
+;; the concrete class is a private inner class. See:
+;; https://github.com/openjdk-mirror/jdk7u-jdk/blob/f4d80957e89a19a29bb9f9807d2a28351ed7f7df/src/share/classes/sun/nio/fs/AbstractWatchKey.java#L190-L222
+(def overflow-event
+  (reify
+    java.nio.file.WatchEvent
+    (kind [this] java.nio.file.StandardWatchEventKinds/OVERFLOW)
+    (count [this] 1)
+    (context [this] nil)))
+
+(deftest process-overflows
+  (testing "process-events!"
+    (let [watch-path (.toPath (fs/temp-dir "process-overflows"))
+          watcher (watch-core/create-watcher)
+          watch-key (.register
+                      watch-path
+                      (:watch-service watcher)
+                      (into-array [java.nio.file.StandardWatchEventKinds/ENTRY_CREATE]))
+          events [overflow-event]
+          actual (atom [])
+          expected #{{:type :unknown :path nil}}
+          callback (make-callback actual)]
+      (testing "overflow events are handled normally"
+        (add-callback! watcher callback)
+        (watch-core/process-events! watcher watch-key events (fn [func] (func)))
+        (is (= expected (wait-for-events actual expected)))))))
