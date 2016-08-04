@@ -95,6 +95,7 @@
   (let [watch-key (.take (:watch-service watcher))
         events (.pollEvents watch-key)]
     (.reset watch-key)
+    (watch-new-directories! (map #(clojurize % (.watchable watch-key)) events) watcher)
     [watch-key events]))
 
 (schema/defn process-events!
@@ -114,8 +115,7 @@
                 (ks/pprint-to-string
                   (map clojurize-for-logging orig-events)))
     (doseq [callback callbacks]
-      (callback clojure-events))
-    (watch-new-directories! clojure-events watcher)))
+      (callback clojure-events))))
 
 (schema/defn watch!
   "Creates a future and processes events for the passed in watcher.
