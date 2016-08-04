@@ -101,8 +101,7 @@
   "Process for side-effects any events that occured for watcher's watch-key"
   [watcher :- (schema/protocol Watcher)
    watch-key :- WatchKey
-   orig-events :- [WatchEvent]
-   shutdown-fn :- IFn]
+   orig-events :- [WatchEvent]]
   (let [clojure-events (map #(clojurize % (.watchable watch-key)) orig-events)
         callbacks @(:callbacks watcher)]
     (log/info (trs "Got {0} event(s) for watched-path {1}"
@@ -114,8 +113,8 @@
                 (trs "orig-events:")
                 (ks/pprint-to-string
                   (map clojurize-for-logging orig-events)))
-    (shutdown-fn #(doseq [callback callbacks]
-                   (callback clojure-events)))
+    (doseq [callback callbacks]
+      (callback clojure-events))
     (watch-new-directories! clojure-events watcher)))
 
 (schema/defn watch!
@@ -125,12 +124,12 @@
    shutdown-fn :- IFn]
   (future
     (let [stopped? (atom false)]
-      (while (not @stopped?)
-        (try
-          (let [[watch-key events] (retrieve-events watcher)]
-            (when-not (empty? events)
-              (process-events! watcher watch-key events shutdown-fn)))
-         (catch ClosedWatchServiceException e
-           (reset! stopped? true)
-           (log/info (trs "Closing watcher {0}" watcher))))))))
+      (shutdown-fn #(while (not @stopped?)
+                     (try
+                       (let [[watch-key events] (retrieve-events watcher)]
+                         (when-not (empty? events)
+                           (process-events! watcher watch-key events)))
+                      (catch ClosedWatchServiceException e
+                        (reset! stopped? true)
+                        (log/info (trs "Closing watcher {0}" watcher)))))))))
 
