@@ -35,27 +35,32 @@
 
 (schema/defn clojurize :- Event
   [event :- WatchEvent
-   watch-path :- Path]
-  {:type (get event-type-mappings (.kind event))
-   :path (when-not (= StandardWatchEventKinds/OVERFLOW (.kind event))
-           (-> watch-path
-               (.resolve (.context event))
-               fs/file))})
+   watched-path :- Path]
+  (let [kind (get event-type-mappings (.kind event))
+        changed-path (when-not (= :unknown kind)
+                       (.context event))
+        full-path (when-not (= :unknown kind)
+                    (-> watched-path (.resolve changed-path) fs/file))]
+    {:type kind
+     :count (.count event)
+     :watched-path (fs/file watched-path)
+     :changed-path (fs/file changed-path)
+     :full-path full-path}))
 
-;; This is quite similar to the function above but it is more a direct
-;; conversion of the exact data available on a specific WatchEvent instance,
-;; only used for debugging.
-(defn clojurize-for-logging
-  [e]
-  {:context (.context e)
-   :count (.count e)
-   :kind (.kind e)})
+(schema/defn format-for-debugging
+  [{:keys [changed-path count type]} :- Event]
+  {:context changed-path
+   :count count
+   :kind type})
 
-(defn pprint-events
-  [events]
-  (->> events
-       (map #(update % :path str))
-       ks/pprint-to-string))
+(schema/defn format-for-consumers
+  [{:keys [full-path type]} :- Event]
+  {:path full-path
+   :type type})
+
+(schema/defn format-for-users
+  [event :- Event]
+  (update (format-for-consumers event) :path str))
 
 (defn validate-watch-options!
   [options]
@@ -87,55 +92,56 @@
    watcher :- (schema/protocol Watcher)]
   (let [dir-create? (fn [event]
                       (and (= :create (:type event))
-                           (fs/directory? (:path event))))]
+                           (fs/directory? (:full-path event))))]
     (DirWatchUtils/registerRecursive (:watch-service watcher)
                                      (->> events
                                           (filter dir-create?)
-                                          (map #(.toPath (:path %)))))))
+                                          (map #(.toPath (:full-path %)))))))
 
-(schema/defn retrieve-events :- {WatchKey [WatchEvent]}
+(defn get-event-maps-from-key
+  [watch-key]
+  (let [events (.pollEvents watch-key)]
+    (map #(clojurize % (.watchable watch-key)) events)))
+
+(schema/defn retrieve-events :- [Event]
   "Blocks until an event the watcher is concerned with has occured. Will then
   poll for a new event, watiting at least `window-min` for a new event to
   occur. Will continue polling for as long as there are new events that occur
   within `window-min`, or the `window-max` time limit has been exceeded."
   [watcher :- (schema/protocol Watcher)]
   (let [watch-key (.take (:watch-service watcher))
-        events (vec (.pollEvents watch-key))
-        time-limit (+ (System/currentTimeMillis) window-max)
-        events-by-key {watch-key events}]
+        events (get-event-maps-from-key watch-key)
+        time-limit (+ (System/currentTimeMillis) window-max)]
     (.reset watch-key)
-    (watch-new-directories! (map #(clojurize % (.watchable watch-key)) events) watcher)
-      (loop [keys-events events-by-key]
+    (watch-new-directories! events watcher)
+      (loop [events' events]
         (if-let [waiting-key (.poll (:watch-service watcher) window-min window-units)]
-          (let [waiting-events (vec (.pollEvents waiting-key))]
-            (watch-new-directories! (map #(clojurize % (.watchable waiting-key)) waiting-events) watcher)
+          (let [waiting-events (get-event-maps-from-key waiting-key)]
+            (watch-new-directories! waiting-events watcher)
             (.reset waiting-key)
             (if (< (System/currentTimeMillis) time-limit)
-              (recur (update keys-events waiting-key into waiting-events))
-              (update keys-events waiting-key waiting-events)))
-          keys-events))))
+              (recur (into events' waiting-events))
+              (into events' waiting-events)))
+          events'))))
 
 
 (schema/defn process-events!
   "Process for side-effects any events that occured for watcher's watch-key"
   [watcher :- (schema/protocol Watcher)
-   events-by-key :- {WatchKey [WatchEvent]}]
-  (let [orig-events (flatten (vals events-by-key))
-        clojure-events (mapcat
-                         (fn [kv] (map #(clojurize % (.watchable (first kv))) (second kv)))
-                         events-by-key)
-        callbacks @(:callbacks watcher)]
+   events :- [Event]]
+  (let [callbacks @(:callbacks watcher)]
     (log/info (trs "Got {0} event(s) on path(s) {1}"
-                   (count orig-events) (map #(.watchable %) (keys events-by-key))))
+                   (count events) (distinct (map #(:full-path %) events))))
     (log/debugf "%s\n%s"
                 (trs "Events:")
-                (pprint-events clojure-events))
+                (ks/pprint-to-string
+                  (map format-for-users events)))
     (log/tracef "%s\n%s"
                 (trs "orig-events:")
                 (ks/pprint-to-string
-                  (map clojurize-for-logging orig-events)))
+                  (map format-for-debugging events)))
     (doseq [callback callbacks]
-      (callback clojure-events))))
+      (callback (map format-for-consumers events)))))
 
 (schema/defn watch!
   "Creates a future and processes events for the passed in watcher.
@@ -146,9 +152,9 @@
     (let [stopped? (atom false)]
       (shutdown-fn #(while (not @stopped?)
                      (try
-                       (let [events-by-key (retrieve-events watcher)]
-                         (when-not (empty? (vals events-by-key))
-                           (process-events! watcher events-by-key)))
+                       (let [events (retrieve-events watcher)]
+                         (when-not (empty? events)
+                           (process-events! watcher events)))
                       (catch ClosedWatchServiceException e
                         (reset! stopped? true)
                         (log/info (trs "Closing watcher {0}" watcher)))))))))

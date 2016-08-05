@@ -414,11 +414,11 @@
                       watch-path
                       (:watch-service watcher)
                       (into-array [java.nio.file.StandardWatchEventKinds/ENTRY_CREATE]))
-          events [overflow-event]
+          events [(watch-core/clojurize overflow-event watch-path)]
           actual (atom [])
           expected #{{:type :unknown :path nil}}
           callback (make-callback actual)]
       (testing "overflow events are handled normally"
         (add-callback! watcher callback)
-        (watch-core/process-events! watcher {watch-key events})
+        (watch-core/process-events! watcher events)
         (is (= expected (wait-for-events actual expected)))))))
