@@ -396,6 +396,53 @@
             #"shutdown-on-error triggered because of exception"
             :error))))))
 
+(deftest ^:integration debouncing-test
+  (testing "Default debouncing behavior"
+    (let [root-dir (fs/temp-dir "debounce")
+          actual-events (atom [])
+          actual-calls (atom 0)
+          callback (fn [e]
+                     (swap! actual-events concat e)
+                     (swap! actual-calls inc))
+          app (tk/boot-services-with-config watch-service-and-deps {})
+          svc (tk-app/get-service app :FilesystemWatchService)
+          event-cadence (quot watch-core/window-min 2)]
+      ;; We trigger half the number of events that could independently occur
+      ;; without exceeding the window-max, we trigger them at half the wait
+      ;; of window-min to ensure they will all be caught even if the host
+      ;; running the tests is slow. This requires that window-max be at least
+      ;; twice the duration as window-min.
+      (testing "multiple events trigger one callback when within `window-min` and `window-max`"
+        (let [test-dir (fs/file root-dir "window-min")
+              event-nums (quot (quot watch-core/window-max watch-core/window-min) 2)
+              files (map #(fs/file test-dir (str % ".txt")) (range 0 event-nums))
+              expected-events (set (map (fn [f] {:path f :type :create}) files))]
+          (is (> event-nums 1))
+          (is (fs/mkdirs test-dir))
+          (watch! svc test-dir callback)
+          (doseq [f files] (fs/touch f) (Thread/sleep event-cadence))
+          (is (= expected-events (wait-for-events actual-events expected-events)))
+          (is (= @actual-calls 1))))
+      ;; We trigger events at the same cadence as above to ensure that we will
+      ;; be causing events within window-min and continuing the polling loop.
+      ;; We trigger them for what should be twice the duration of window-max
+      ;; however to see the loop properly short circuited. Depending on the
+      ;; speed of the test runner host, we could see between 2 and 4 callbacks
+      ;; without seeing failures elsewhere in the suite.
+      (testing "multiple callbacks are triggered if polling exceeds `window-max`"
+        (let [test-dir (fs/file root-dir "window-max")
+              event-nums (* (quot watch-core/window-max watch-core/window-min) 4)
+              files (map #(fs/file test-dir (str % ".txt")) (range 0 event-nums))
+              expected-events (set (map (fn [f] {:path f :type :create}) files))]
+          (is (> event-nums 2))
+          (is (fs/mkdirs test-dir))
+          (watch! svc test-dir callback)
+          (reset! actual-events [])
+          (reset! actual-calls 0)
+          (doseq [f files] (fs/touch f) (Thread/sleep event-cadence))
+          (is (= expected-events (wait-for-events actual-events expected-events)))
+          (is (>= @actual-calls 2)))))))
+
 ;; Here we create a stub object that implements the WatchEvent interface as
 ;; the concrete class is a private inner class. See:
 ;; https://github.com/openjdk-mirror/jdk7u-jdk/blob/f4d80957e89a19a29bb9f9807d2a28351ed7f7df/src/share/classes/sun/nio/fs/AbstractWatchKey.java#L190-L222
