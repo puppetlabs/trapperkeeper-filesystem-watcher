@@ -40,11 +40,11 @@
         changed-path (when-not (= :unknown kind)
                        (.context event))
         full-path (when-not (= :unknown kind)
-                    (-> watched-path (.resolve changed-path) fs/file))]
+                    (-> watched-path (.resolve changed-path) (.toFile)))]
     {:type kind
      :count (.count event)
-     :watched-path (fs/file watched-path)
-     :changed-path (fs/file changed-path)
+     :watched-path (.toFile watched-path)
+     :changed-path (when changed-path (.toFile changed-path))
      :full-path full-path}))
 
 (schema/defn format-for-debugging
