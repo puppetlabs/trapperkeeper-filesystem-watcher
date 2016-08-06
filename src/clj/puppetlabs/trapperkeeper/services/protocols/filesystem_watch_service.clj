@@ -7,14 +7,11 @@
   (schema/if #(= (:type %) :unknown)
     {:type (schema/eq :unknown)
      :count schema/Int
-     :watched-path File
-     :changed-path (schema/pred nil?)
-     :full-path (schema/pred nil?)}
+     :watched-path File}
     {:type (schema/enum :create :modify :delete)
      :count schema/Int
      :watched-path File
-     :changed-path File
-     :full-path File}))
+     :changed-path File}))
 
 (defprotocol Watcher
   (add-watch-dir! [this dir options]
