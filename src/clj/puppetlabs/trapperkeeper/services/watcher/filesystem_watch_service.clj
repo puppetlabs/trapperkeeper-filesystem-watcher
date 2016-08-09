@@ -12,7 +12,7 @@
 
   (init
     [this context]
-    {:watchers (atom [])})
+    (assoc context :watchers (atom [])))
 
   (stop
     [this context]
