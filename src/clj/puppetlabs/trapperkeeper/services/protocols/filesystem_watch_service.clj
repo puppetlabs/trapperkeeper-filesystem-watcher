@@ -6,9 +6,12 @@
   "Schema for an event on a file watched by this service."
   (schema/if #(= (:type %) :unknown)
     {:type (schema/eq :unknown)
-     :path (schema/pred nil?)}
+     :count schema/Int
+     :watched-path File}
     {:type (schema/enum :create :modify :delete)
-     :path File}))
+     :count schema/Int
+     :watched-path File
+     :changed-path File}))
 
 (defprotocol Watcher
   (add-watch-dir! [this dir options]

@@ -24,8 +24,9 @@
     (swap! dest concat events)))
 
 (defn contains-events?
-  [dest events]
-  (set/subset? events (set @dest)))
+  ([dest events]
+   (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
+     (set/subset? events select-keys-set))))
 
 (def wait-time
   "Number of milliseconds wait-for-events! should wait."
@@ -70,7 +71,7 @@
        (is (= @results [])))
      (testing "callback is invoked when a new file is created"
        (spit first-file "foo")
-       (let [events #{{:path first-file
+       (let [events #{{:changed-path first-file
                        :type :create}}]
          ;; This is the first of many weird assertions like this, but it's done
          ;; this way on purpose to get decent reporting from failed assertions.
@@ -79,23 +80,23 @@
      (testing "callback invoked again when another new file is created"
        (reset! results [])
        (spit second-file "bar")
-       (let [events #{{:path second-file
+       (let [events #{{:changed-path second-file
                        :type :create}}]
          (is (= events (wait-for-events results events)))))
      (testing "watch-dir! also reports file modifications"
        (testing "of a single file"
          (reset! results [])
          (spit first-file "something different")
-         (let [events #{{:path first-file
+         (let [events #{{:changed-path first-file
                   :type :modify}}]
            (is (= events (wait-for-events results events)))))
        (testing "of multiple files"
          (reset! results [])
          (spit first-file "still not the same as before")
          (spit second-file "still not the same as before")
-         (let [events #{{:path first-file
+         (let [events #{{:changed-path first-file
                          :type :modify}
-                        {:path second-file
+                        {:changed-path second-file
                          :type :modify}}]
            (is (= events (wait-for-events results events))))))
      (testing "watch-dir! also reports file deletions"
@@ -103,9 +104,9 @@
          (reset! results [])
          (is (fs/delete first-file))
          (is (fs/delete second-file))
-         (let [events #{{:path first-file
+         (let [events #{{:changed-path first-file
                          :type :delete}
-                        {:path second-file
+                        {:changed-path second-file
                          :type :delete}}]
            (is (= events (wait-for-events results events))))))
      (testing "re-creation of a deleted directory"
@@ -113,17 +114,17 @@
        (let [sub-dir (fs/file root "sub-dir")]
          (testing "Initial directory creation and deletion"
            (is (fs/mkdir sub-dir))
-           (let [events #{{:path sub-dir
+           (let [events #{{:changed-path sub-dir
                            :type :create}}]
              (is (= events (wait-for-events results events))))
            (is (fs/delete sub-dir))
-           (let [events #{{:path sub-dir
+           (let [events #{{:changed-path sub-dir
                            :type :delete}}]
              (is (= events (wait-for-events results events)))))
          (testing "Re-creating the directory fires an event as expected"
            (reset! results [])
            (is (fs/mkdir sub-dir))
-           (let [events #{{:path sub-dir
+           (let [events #{{:changed-path sub-dir
                            :type :create}}]
              (is (= events (wait-for-events results events))))))))))
 
@@ -143,7 +144,7 @@
        (watch! service root-2 callback-2))
      (testing "callback-1 is invoked when root-1 changes"
        (spit root-1-file "foo")
-       (let [events #{{:path root-1-file
+       (let [events #{{:changed-path root-1-file
                        :type :create}}]
          (is (= events (wait-for-events results-1 events))))
        (testing "but not callback-2"
@@ -151,7 +152,7 @@
      (testing "callback-2 is invoked when root-2 changes"
        (reset! results-1 [])
        (spit root-2-file "foo")
-       (let [events #{{:path root-2-file
+       (let [events #{{:changed-path root-2-file
                        :type :create}}]
          (is (= events (wait-for-events results-2 events))))
        (testing "but not callback-1"
@@ -161,9 +162,9 @@
        (reset! results-2 [])
        (spit root-1-file "bar")
        (spit root-2-file "bar")
-       (let [events-1 #{{:path root-1-file
+       (let [events-1 #{{:changed-path root-1-file
                          :type :modify}}
-             events-2 #{{:path root-2-file
+             events-2 #{{:changed-path root-2-file
                          :type :modify}}]
          (is (= events-1 (wait-for-events results-1 events-1)))
          (is (= events-2 (wait-for-events results-2 events-2))))))))
@@ -182,21 +183,21 @@
      (testing "file creation at root dir"
        (let [test-file (fs/file root-dir "foo")]
          (spit test-file "foo")
-         (let [events #{{:path test-file
+         (let [events #{{:changed-path test-file
                          :type :create}}]
            (is (= events (wait-for-events results events))))))
      (testing "file creation at one level down"
        (let [test-file (fs/file intermediate-dir "foo")]
          (reset! results [])
          (spit test-file "foo")
-         (let [events #{{:path test-file
+         (let [events #{{:changed-path test-file
                          :type :create}}]
            (is (= events (wait-for-events results events))))))
      (testing "file creation two levels down"
        (let [test-file (fs/file nested-dir "foo")]
          (reset! results [])
          (spit test-file "foo")
-         (let [events #{{:path test-file
+         (let [events #{{:changed-path test-file
                          :type :create}}]
            (is (= events (wait-for-events results events))))))
      (let [root-file (fs/file root-dir "bar")
@@ -207,29 +208,29 @@
          (spit root-file "bar")
          (spit nested-file "bar")
          (spit intermediate-file "bar")
-         (let [events #{{:path root-file
+         (let [events #{{:changed-path root-file
                          :type :create}
-                        {:path nested-file
+                        {:changed-path nested-file
                          :type :create}
-                        {:path intermediate-file
+                        {:changed-path intermediate-file
                          :type :create}}]
            (is (= events (wait-for-events results events)))))
        (testing "modifying a nested file"
          (reset! results [])
          (spit nested-file "something new")
-         (let [events #{{:path nested-file
+         (let [events #{{:changed-path nested-file
                          :type :modify}}]
            (is (= events (wait-for-events results events)))))
        (testing "deletion of a nested file"
          (reset! results [])
          (is (fs/delete nested-file))
-         (let [events #{{:path nested-file
+         (let [events #{{:changed-path nested-file
                          :type :delete}}]
            (is (= events (wait-for-events results events)))))
        (testing "burn it all down"
          (reset! results [])
          (is (fs/delete-dir intermediate-dir))
-         (let [events #{{:path intermediate-dir
+         (let [events #{{:changed-path intermediate-dir
                          :type :delete}}]
            (is (= events (wait-for-events results events)))))
        (let [another-nested-dir (fs/file root-dir "another-nested-dir")
@@ -238,19 +239,19 @@
            (testing "creation"
              (reset! results [])
              (is (fs/mkdir another-nested-dir))
-             (let [events #{{:path another-nested-dir
+             (let [events #{{:changed-path another-nested-dir
                              :type :create}}]
                (is (= events (wait-for-events results events)))))
            (testing "creation of a file within"
              (reset! results [])
              (spit new-nested-file "new nested file in nested dir")
-             (let [events #{{:path new-nested-file
+             (let [events #{{:changed-path new-nested-file
                              :type :create}}]
                (is (= events (wait-for-events results events)))))
            (testing "deletion"
              (reset! results [])
              (is (fs/delete-dir another-nested-dir))
-             (let [events #{{:path another-nested-dir
+             (let [events #{{:changed-path another-nested-dir
                              :type :delete}}]
                (is (= events (wait-for-events results events)))))))))))
 
@@ -271,22 +272,22 @@
        (add-callback! watcher callback)
        (testing "Events in dir-1"
          (spit test-file-1 "foo")
-         (let [events #{{:path test-file-1
+         (let [events #{{:changed-path test-file-1
                          :type :create}}]
            (is (= events (wait-for-events results events)))))
        (reset! results [])
        (testing "Events in dir-2"
          (spit test-file-2 "foo")
-         (let [events #{{:path test-file-2
+         (let [events #{{:changed-path test-file-2
                          :type :create}}]
            (is (= events (wait-for-events results events)))))
        (reset! results [])
        (testing "Events in both dirs"
          (spit test-file-1 "bar")
          (spit test-file-2 "bar")
-         (let [events #{{:path test-file-1
+         (let [events #{{:changed-path test-file-1
                          :type :modify}
-                        {:path test-file-2
+                        {:changed-path test-file-2
                          :type :modify}}]
            (is (= events (wait-for-events results events)))))
        (reset! results [])
@@ -304,9 +305,9 @@
            ;; https://tickets.puppetlabs.com/browse/TK-387 for more details.
            (Thread/sleep 100)
            (spit test-file-nested "foo")
-           (let [events #{{:path nested-dir
+           (let [events #{{:changed-path nested-dir
                            :type :create}
-                          {:path test-file-nested
+                          {:changed-path test-file-nested
                            :type :create}}]
              (is (= events (wait-for-events results events))))
            (reset! results [])
@@ -314,23 +315,23 @@
              (spit test-file-1 "baz")
              (spit test-file-2 "baz")
              (spit test-file-nested "baz")
-             (let [events #{{:path test-file-1
+             (let [events #{{:changed-path test-file-1
                              :type :modify}
-                            {:path test-file-2
+                            {:changed-path test-file-2
                              :type :modify}
-                            {:path test-file-nested
+                            {:changed-path test-file-nested
                              :type :modify}}]
                (is (= events (wait-for-events results events)))))
            (reset! results [])
            (testing "Deletion thereof"
              (is (fs/delete-dir nested-dir))
-             (let [events #{{:path nested-dir
+             (let [events #{{:changed-path nested-dir
                              :type :delete}}]
                (is (= events (wait-for-events results events))))
              (reset! results [])
              (testing "Leaves the parent watched dir unaffected"
                (spit test-file-1 "bamboozle")
-               (let [events #{{:path test-file-1
+               (let [events #{{:changed-path test-file-1
                                :type :modify}}]
                  (is (= events (wait-for-events results events))))))))))))
 
@@ -355,9 +356,9 @@
          (testing "Events do not bleed over between watchers"
            (spit test-file-1 "foo")
            (spit test-file-2 "foo")
-           (let [events-1 #{{:path test-file-1
+           (let [events-1 #{{:changed-path test-file-1
                              :type :create}}
-                 events-2 #{{:path test-file-2
+                 events-2 #{{:changed-path test-file-2
                              :type :create}}]
              (is (= events-1 (wait-for-events results-1 events-1)))
              (is (= events-2 (wait-for-events results-2 events-2))))))
@@ -372,9 +373,9 @@
            (watch!* watcher-3 dir-1 callback-3)
            (spit test-file-1 "bar")
            (spit test-file-2 "bar")
-           (let [events-1 #{{:path test-file-1
+           (let [events-1 #{{:changed-path test-file-1
                              :type :modify}}
-                 events-2 #{{:path test-file-2
+                 events-2 #{{:changed-path test-file-2
                              :type :modify}}]
              (is (= events-1 (wait-for-events results-1 events-1)))
              (is (= events-1 (wait-for-events results-3 events-1)))
@@ -396,29 +397,69 @@
             #"shutdown-on-error triggered because of exception"
             :error))))))
 
+(deftest ^:integration debouncing-test
+  (testing "Default debouncing behavior"
+    (let [root-dir (fs/temp-dir "debounce")
+          actual-events (atom [])
+          actual-calls (atom 0)
+          callback (fn [e]
+                     (swap! actual-events concat e)
+                     (swap! actual-calls inc))
+          app (tk/boot-services-with-config watch-service-and-deps {})
+          svc (tk-app/get-service app :FilesystemWatchService)
+          event-cadence (quot watch-core/window-min 2)]
+      ;; We trigger half the number of events that could independently occur
+      ;; without exceeding the window-max, given the fixed event-cadence
+      ;; set above, we set the event-cadence to half of window-min to increase
+      ;; the likelihood that they will be caught regardless of test runner
+      ;; speed. This requires that window-max be at least four times the
+      ;; duration of window-min.
+      (testing "multiple events trigger one callback when within `window-min` and `window-max`"
+        (let [test-dir (fs/file root-dir "window-min")
+              event-nums (quot (quot watch-core/window-max watch-core/window-min) 2)
+              files (map #(fs/file test-dir (str % ".txt")) (range 0 event-nums))
+              expected-events (set (map (fn [f] {:changed-path f :type :create}) files))]
+          (is (> event-nums 1))
+          (is (fs/mkdirs test-dir))
+          (watch! svc test-dir callback)
+          (doseq [f files] (fs/touch f) (Thread/sleep event-cadence))
+          (is (= expected-events (wait-for-events actual-events expected-events)))
+          (is (= @actual-calls 1))))
+      ;; We trigger events at the same cadence as above to ensure that we will
+      ;; be causing events within window-min and continuing the polling loop.
+      ;; We trigger them for what should be twice the duration of window-max
+      ;; however to see the loop properly short circuited. Depending on the
+      ;; speed of the test runner host, we could see between 2 and 4 callbacks
+      ;; without seeing failures elsewhere in the suite.
+      (testing "multiple callbacks are triggered if polling exceeds `window-max`"
+        (let [test-dir (fs/file root-dir "window-max")
+              event-nums (* (quot watch-core/window-max watch-core/window-min) 4)
+              files (map #(fs/file test-dir (str % ".txt")) (range 0 event-nums))
+              expected-events (set (map (fn [f] {:changed-path f :type :create}) files))]
+          (is (>= event-nums 4))
+          (is (fs/mkdirs test-dir))
+          (watch! svc test-dir callback)
+          (reset! actual-events [])
+          (reset! actual-calls 0)
+          (doseq [f files] (fs/touch f) (Thread/sleep event-cadence))
+          (is (= expected-events (wait-for-events actual-events expected-events)))
+          (is (>= @actual-calls 2))
+          (is (<= @actual-calls 4)
+              "System speed is slower than expected to reliably run this test"))))))
+
 ;; Here we create a stub object that implements the WatchEvent interface as
 ;; the concrete class is a private inner class. See:
 ;; https://github.com/openjdk-mirror/jdk7u-jdk/blob/f4d80957e89a19a29bb9f9807d2a28351ed7f7df/src/share/classes/sun/nio/fs/AbstractWatchKey.java#L190-L222
-(def overflow-event
-  (reify
-    java.nio.file.WatchEvent
-    (kind [this] java.nio.file.StandardWatchEventKinds/OVERFLOW)
-    (count [this] 1)
-    (context [this] nil)))
-
-(deftest process-overflows
-  (testing "process-events!"
-    (let [watch-path (.toPath (fs/temp-dir "process-overflows"))
-          watcher (watch-core/create-watcher)
-          watch-key (.register
-                      watch-path
-                      (:watch-service watcher)
-                      (into-array [java.nio.file.StandardWatchEventKinds/ENTRY_CREATE]))
-          events [overflow-event]
-          actual (atom [])
-          expected #{{:type :unknown :path nil}}
-          callback (make-callback actual)]
+;; We test only the OVERFLOW event because it is special case and will not be
+;; triggered in the normal integration tests above.
+(deftest clojurize-overflows
+  (testing "clojurize"
+    (let [watch-path (.toPath (fs/temp-dir "clojurize-overflows"))
+          overflow-event (reify
+                          java.nio.file.WatchEvent
+                          (kind [this] java.nio.file.StandardWatchEventKinds/OVERFLOW)
+                          (count [this] 1)
+                          (context [this] nil))
+          expected {:type :unknown :count 1 :watched-path (.toFile watch-path)}]
       (testing "overflow events are handled normally"
-        (add-callback! watcher callback)
-        (watch-core/process-events! watcher watch-key events (fn [func] (func)))
-        (is (= expected (wait-for-events actual expected)))))))
+        (is (= expected (watch-core/clojurize overflow-event watch-path)))))))

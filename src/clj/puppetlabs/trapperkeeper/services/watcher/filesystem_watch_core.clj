@@ -19,6 +19,12 @@
    StandardWatchEventKinds/ENTRY_DELETE :delete
    StandardWatchEventKinds/OVERFLOW :unknown})
 
+(def window-min 100)
+
+(def window-max 2000)
+
+(def window-units java.util.concurrent.TimeUnit/MILLISECONDS)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Functions
 ;;;
@@ -28,28 +34,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (schema/defn clojurize :- Event
+  "Takes the Java WatchEvent and the watchable Java Path that the event
+  occurred within and creates a Clojure map to represent the Event
+  throughout the system. The watched-path key is the registered watchable,
+  the changed-path the relative path to what changed, and the full path is
+  the absolute path to the changed event (watched-path + changed-path)."
   [event :- WatchEvent
-   watch-path :- Path]
-  {:type (get event-type-mappings (.kind event))
-   :path (when-not (= StandardWatchEventKinds/OVERFLOW (.kind event))
-           (-> watch-path
-               (.resolve (.context event))
-               fs/file))})
-
-;; This is quite similar to the function above but it is more a direct
-;; conversion of the exact data available on a specific WatchEvent instance,
-;; only used for debugging.
-(defn clojurize-for-logging
-  [e]
-  {:context (.context e)
-   :count (.count e)
-   :kind (.kind e)})
-
-(defn pprint-events
-  [events]
-  (->> events
-       (map #(update % :path str))
-       ks/pprint-to-string))
+   watched-path :- Path]
+  (let [kind (get event-type-mappings (.kind event))
+        count (.count event)]
+    (if (= :unknown kind)
+      {:type kind
+       :count count
+       :watched-path (.toFile watched-path)}
+      {:type kind
+       :count count
+       :watched-path (.toFile watched-path)
+       :changed-path (.. watched-path (resolve (.context event)) (toFile))})))
 
 (defn validate-watch-options!
   [options]
@@ -81,42 +82,55 @@
    watcher :- (schema/protocol Watcher)]
   (let [dir-create? (fn [event]
                       (and (= :create (:type event))
-                           (fs/directory? (:path event))))]
+                           (fs/directory? (:changed-path event))))]
     (DirWatchUtils/registerRecursive (:watch-service watcher)
                                      (->> events
                                           (filter dir-create?)
-                                          (map #(.toPath (:path %)))))))
+                                          (map #(.toPath (:changed-path %)))))))
 
-(schema/defn retrieve-events
-  :- [(schema/one WatchKey "key") (schema/one [WatchEvent] "events")]
-  "Blocks until an event the watcher is concerned with has occured.
-  Returns the native WatchKey and WatchEvents"
+(schema/defn watch-key->events :- [Event]
+  [watch-key :- WatchKey]
+  (let [events (.pollEvents watch-key)]
+    (map #(clojurize % (.watchable watch-key)) events)))
+
+(schema/defn retrieve-events :- [Event]
+  "Blocks until an event the watcher is concerned with has occured. Will then
+  poll for a new event, waiting at least `window-min` for a new event to
+  occur. Will continue polling for as long as there are new events that occur
+  within `window-min`, or the `window-max` time limit has been exceeded."
   [watcher :- (schema/protocol Watcher)]
   (let [watch-key (.take (:watch-service watcher))
-        events (.pollEvents watch-key)]
+        initial-events (watch-key->events watch-key)
+        time-limit (+ (System/currentTimeMillis) window-max)]
+    (watch-new-directories! initial-events watcher)
     (.reset watch-key)
-    [watch-key events]))
+    (if-not (empty? initial-events)
+      (loop [events initial-events]
+        (if-let [waiting-key (.poll (:watch-service watcher) window-min window-units)]
+          (let [waiting-events (watch-key->events waiting-key)]
+            (watch-new-directories! waiting-events watcher)
+            (.reset waiting-key)
+            (if (< (System/currentTimeMillis) time-limit)
+              (recur (concat events waiting-events))
+              (concat events waiting-events)))
+          events))
+      initial-events)))
+
 
 (schema/defn process-events!
   "Process for side-effects any events that occured for watcher's watch-key"
   [watcher :- (schema/protocol Watcher)
-   watch-key :- WatchKey
-   orig-events :- [WatchEvent]
-   shutdown-fn :- IFn]
-  (let [clojure-events (map #(clojurize % (.watchable watch-key)) orig-events)
-        callbacks @(:callbacks watcher)]
-    (log/info (trs "Got {0} event(s) for watched-path {1}"
-                   (count orig-events) (.watchable watch-key)))
-    (log/debugf "%s\n%s"
-                (trs "Events:")
-                (pprint-events clojure-events))
+   events :- [Event]]
+  (let [callbacks @(:callbacks watcher)
+        events-by-dir (group-by :watched-path events)]
+    (doseq [[dir events'] events-by-dir]
+      (log/info (trs "Got {0} event(s) in directory {1}"
+                   (count events') dir)))
     (log/tracef "%s\n%s"
-                (trs "orig-events:")
-                (ks/pprint-to-string
-                  (map clojurize-for-logging orig-events)))
-    (shutdown-fn #(doseq [callback callbacks]
-                   (callback clojure-events)))
-    (watch-new-directories! clojure-events watcher)))
+                (trs "Events:")
+                (ks/pprint-to-string events))
+    (doseq [callback callbacks]
+      (callback events))))
 
 (schema/defn watch!
   "Creates a future and processes events for the passed in watcher.
@@ -125,12 +139,12 @@
    shutdown-fn :- IFn]
   (future
     (let [stopped? (atom false)]
-      (while (not @stopped?)
-        (try
-          (let [[watch-key events] (retrieve-events watcher)]
-            (when-not (empty? events)
-              (process-events! watcher watch-key events shutdown-fn)))
-         (catch ClosedWatchServiceException e
-           (reset! stopped? true)
-           (log/info (trs "Closing watcher {0}" watcher))))))))
+      (shutdown-fn #(while (not @stopped?)
+                     (try
+                       (let [events (retrieve-events watcher)]
+                         (when-not (empty? events)
+                           (process-events! watcher events)))
+                      (catch ClosedWatchServiceException e
+                        (reset! stopped? true)
+                        (log/info (trs "Closing watcher {0}" watcher)))))))))
 
