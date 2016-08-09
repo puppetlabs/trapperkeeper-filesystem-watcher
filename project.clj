@@ -1,7 +1,7 @@
 (def tk-version "1.4.1")
 (def ks-version "1.3.1")
 
-(defproject puppetlabs/trapperkeeper-filesystem-watcher "1.0.1"
+(defproject puppetlabs/trapperkeeper-filesystem-watcher "1.0.2-SNAPSHOT"
   :description "Trapperkeeper filesystem watcher service"
   :url "https://github.com/puppetlabs/trapperkeeper-filesystem-watcher"
   :license {:name "Apache License, Version 2.0"
