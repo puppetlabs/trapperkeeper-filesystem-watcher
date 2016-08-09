@@ -1,3 +1,7 @@
+# 1.0.1
+
+ - (maint) Fixes a long running, subtle bug in which we discard the trapperkeeper context on init
+
 # 1.0.0
 
  - [TK-385](https://tickets.puppetlabs.com/browse/TK-385) Return events as soon as possible rather than polling
