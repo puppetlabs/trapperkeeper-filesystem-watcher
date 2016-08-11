@@ -398,39 +398,42 @@
             :error))))))
 
 (deftest ^:integration debouncing-test
-  (testing "Default debouncing behavior"
+  (testing "debouncing"
     (let [root-dir (fs/temp-dir "debounce")
           actual-events (atom [])
-          actual-calls (atom 0)
+          callback-invocations (atom 0)
           callback (fn [e]
                      (swap! actual-events concat e)
-                     (swap! actual-calls inc))
+                     (swap! callback-invocations inc))
           app (tk/boot-services-with-config watch-service-and-deps {})
           svc (tk-app/get-service app :FilesystemWatchService)
           event-cadence (quot watch-core/window-min 2)]
-      ;; We trigger half the number of events that could independently occur
-      ;; without exceeding the window-max, given the fixed event-cadence
+      ;; We trigger half the minimum number of events that could independently
+      ;; occur without exceeding the window-max, given the fixed event-cadence
       ;; set above, we set the event-cadence to half of window-min to increase
-      ;; the likelihood that they will be caught regardless of test runner
-      ;; speed. This requires that window-max be at least four times the
+      ;; the likelihood that they will debounced into a single callback
+      ;; invocation. This requires that window-max be at least four times the
       ;; duration of window-min.
-      (testing "multiple events trigger one callback when within `window-min` and `window-max`"
+      (testing "multiple events trigger one callback when within window-min and window-max"
         (let [test-dir (fs/file root-dir "window-min")
-              event-nums (quot (quot watch-core/window-max watch-core/window-min) 2)
-              files (map #(fs/file test-dir (str % ".txt")) (range 0 event-nums))
-              expected-events (set (map (fn [f] {:changed-path f :type :create}) files))]
-          (is (> event-nums 1))
+              num-events (quot (quot watch-core/window-max watch-core/window-min) 2)
+              files (for [n (range num-events)]
+                      (fs/file test-dir (str n ".txt")))
+              expected-events (set (for [f files] {:changed-path f
+                                                   :type :create}))]
+          (is (> num-events 1))
           (is (fs/mkdirs test-dir))
           (watch! svc test-dir callback)
-          (doseq [f files] (fs/touch f) (Thread/sleep event-cadence))
+          (doseq [f files]
+            (fs/touch f)
+            (Thread/sleep event-cadence))
           (is (= expected-events (wait-for-events actual-events expected-events)))
-          (is (= @actual-calls 1))))
+          (is (= @callback-invocations 1))))
       ;; We trigger events at the same cadence as above to ensure that we will
       ;; be causing events within window-min and continuing the polling loop.
       ;; We trigger them for what should be twice the duration of window-max
-      ;; however to see the loop properly short circuited. Depending on the
-      ;; speed of the test runner host, we could see between 2 and 4 callbacks
-      ;; without seeing failures elsewhere in the suite.
+      ;; however to see the loop properly short circuited. The callback should be
+      ;; invoked at least twice.
       (testing "multiple callbacks are triggered if polling exceeds `window-max`"
         (let [test-dir (fs/file root-dir "window-max")
               event-nums (* (quot watch-core/window-max watch-core/window-min) 4)
@@ -440,12 +443,10 @@
           (is (fs/mkdirs test-dir))
           (watch! svc test-dir callback)
           (reset! actual-events [])
-          (reset! actual-calls 0)
+          (reset! callback-invocations 0)
           (doseq [f files] (fs/touch f) (Thread/sleep event-cadence))
           (is (= expected-events (wait-for-events actual-events expected-events)))
-          (is (>= @actual-calls 2))
-          (is (<= @actual-calls 4)
-              "System speed is slower than expected to reliably run this test"))))))
+          (is (>= @callback-invocations 2)))))))
 
 ;; Here we create a stub object that implements the WatchEvent interface as
 ;; the concrete class is a private inner class. See:
