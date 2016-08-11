@@ -432,9 +432,8 @@
       ;; We trigger events at the same cadence as above to ensure that we will
       ;; be causing events within window-min and continuing the polling loop.
       ;; We trigger them for what should be twice the duration of window-max
-      ;; however to see the loop properly short circuited. Depending on the
-      ;; speed of the test runner host, we could see between 2 and 4 callbacks
-      ;; without seeing failures elsewhere in the suite.
+      ;; however to see the loop properly short circuited. The callback should be
+      ;; invoked at least twice.
       (testing "multiple callbacks are triggered if polling exceeds `window-max`"
         (let [test-dir (fs/file root-dir "window-max")
               event-nums (* (quot watch-core/window-max watch-core/window-min) 4)
@@ -447,9 +446,7 @@
           (reset! callback-invocations 0)
           (doseq [f files] (fs/touch f) (Thread/sleep event-cadence))
           (is (= expected-events (wait-for-events actual-events expected-events)))
-          (is (>= @callback-invocations 2))
-          (is (<= @callback-invocations 4)
-              "System speed is slower than expected to reliably run this test"))))))
+          (is (>= @callback-invocations 2)))))))
 
 ;; Here we create a stub object that implements the WatchEvent interface as
 ;; the concrete class is a private inner class. See:
