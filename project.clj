@@ -29,10 +29,10 @@
   :source-paths ["src/clj"]
   :java-source-paths ["src/java"]
 
-  :profiles {:dev {:dependencies [[puppetlabs/trapperkeeper nil
+  :profiles {:dev {:dependencies [[puppetlabs/trapperkeeper
                                    :classifier "test"
                                    :scope "test"]
-                                  [puppetlabs/kitchensink nil
+                                  [puppetlabs/kitchensink
                                    :classifier "test"
                                    :scope "test"]]}}
 
