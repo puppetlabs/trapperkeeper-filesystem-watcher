@@ -19,7 +19,6 @@
                  [me.raynes/fs]
                  [puppetlabs/trapperkeeper]
                  [puppetlabs/kitchensink]
-                 [puppetlabs/trapperkeeper-scheduler]
                  [puppetlabs/i18n]]
 
   :deploy-repositories [["releases" {:url "https://clojars.org/repo"
