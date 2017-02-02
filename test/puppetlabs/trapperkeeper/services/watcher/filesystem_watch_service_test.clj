@@ -6,7 +6,6 @@
             [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer :all]
             [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service :refer [filesystem-watch-service]]
             [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-core :as watch-core]
-            [puppetlabs.trapperkeeper.services.scheduler.scheduler-service :refer [scheduler-service]]
             [puppetlabs.trapperkeeper.testutils.bootstrap :refer [with-app-with-config]]
             [puppetlabs.trapperkeeper.testutils.logging :refer [with-test-logging]]
             [puppetlabs.trapperkeeper.core :as tk]
@@ -14,9 +13,6 @@
             [puppetlabs.trapperkeeper.internal :as tk-internal]))
 
 (use-fixtures :once schema-test/validate-schemas)
-
-(def watch-service-and-deps
-  [filesystem-watch-service scheduler-service])
 
 (defn make-callback
   [dest]
@@ -64,7 +60,7 @@
         results (atom [])
         callback (make-callback results)]
     (with-app-with-config
-     app watch-service-and-deps {}
+     app [filesystem-watch-service] {}
      (let [service (tk-app/get-service app :FilesystemWatchService)]
        (watch! service root callback))
      (testing "callback not invoked until directory changes"
@@ -138,7 +134,7 @@
         callback-1 (make-callback results-1)
         callback-2 (make-callback results-2)]
     (with-app-with-config
-     app watch-service-and-deps {}
+     app [filesystem-watch-service] {}
      (let [service (tk-app/get-service app :FilesystemWatchService)]
        (watch! service root-1 callback-1)
        (watch! service root-2 callback-2))
@@ -177,7 +173,7 @@
         callback (make-callback results)]
     (is (fs/mkdirs nested-dir))
     (with-app-with-config
-     app watch-service-and-deps {}
+     app [filesystem-watch-service] {}
      (let [service (tk-app/get-service app :FilesystemWatchService)]
        (watch! service root-dir callback))
      (testing "file creation at root dir"
@@ -258,7 +254,7 @@
 (deftest ^:integration multiple-watch-dirs-test
   (testing "Watching of multiple directories using a single watcher"
     (with-app-with-config
-     app watch-service-and-deps {}
+     app [filesystem-watch-service] {}
      (let [service (tk-app/get-service app :FilesystemWatchService)
            watcher (create-watcher service)
            results (atom [])
@@ -338,7 +334,7 @@
 (deftest ^:integration multiple-watcher-test
   (testing "Multiple watchers"
     (with-app-with-config
-     app watch-service-and-deps {}
+     app [filesystem-watch-service] {}
      (let [service (tk-app/get-service app :FilesystemWatchService)
            watcher-1 (create-watcher service)
            watcher-2 (create-watcher service)
@@ -385,7 +381,7 @@
   (let [root-dir (fs/temp-dir "root-dir")
         error (Exception. "boom")
         callback (fn [& _] (throw error))]
-    (let [app (tk/boot-services-with-config watch-service-and-deps {})
+    (let [app (tk/boot-services-with-config [filesystem-watch-service] {})
           service (tk-app/get-service app :FilesystemWatchService)]
       (watch! service root-dir callback)
       (with-test-logging
@@ -405,7 +401,7 @@
           callback (fn [e]
                      (swap! actual-events concat e)
                      (swap! callback-invocations inc))
-          app (tk/boot-services-with-config watch-service-and-deps {})
+          app (tk/boot-services-with-config [filesystem-watch-service] {})
           svc (tk-app/get-service app :FilesystemWatchService)
           event-cadence (quot watch-core/window-min 2)]
       ;; We trigger half the minimum number of events that could independently
