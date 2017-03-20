@@ -1,0 +1,38 @@
+# Esperanto translations for puppetlabs.trapperkeeper_filesystem_watcher package.
+# Copyright (C) 2017 Puppet <docs@puppet.com>
+# This file is distributed under the same license as the puppetlabs.trapperkeeper_filesystem_watcher package.
+# Automatically generated, 2017.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: puppetlabs.trapperkeeper_filesystem_watcher \n"
+"Report-Msgid-Bugs-To: docs@puppet.com\n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: eo\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
+msgid "Support for non-recursive directory watching not yet implemented"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
+msgid "Got {0} event(s) in directory {1}"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
+msgid "Events:"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
+msgid "Closing watcher {0}"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_service.clj
+msgid "Exception while closing watch service"
+msgstr ""
