@@ -124,7 +124,7 @@
   (let [callbacks @(:callbacks watcher)
         events-by-dir (group-by :watched-path events)]
     (doseq [[dir events'] events-by-dir]
-      (log/info (trs "Got {0} event(s) in directory {1}"
+      (log/debug (trs "Got {0} event(s) in directory {1}"
                    (count events') dir)))
     (log/tracef "%s\n%s"
                 (trs "Events:")
