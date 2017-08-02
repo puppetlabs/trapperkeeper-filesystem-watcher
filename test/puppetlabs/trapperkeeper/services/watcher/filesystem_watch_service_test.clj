@@ -251,6 +251,40 @@
                              :type :delete}}]
                (is (= events (wait-for-events results events)))))))))))
 
+(deftest ^:integration recurse-false-test
+  (testing "Watching of nested directories with recursive disabled"
+    (with-app-with-config
+     app [filesystem-watch-service] {}
+     (let [service (tk-app/get-service app :FilesystemWatchService)
+           watcher (create-watcher service)
+           results (atom [])
+           callback (make-callback results)
+           root-dir (fs/temp-dir "root-dir")
+           intermediate-dir (fs/file root-dir "intermediate-dir")
+           nested-dir (fs/file intermediate-dir "nested-dir")
+           canary-file (fs/file root-dir "canary")]
+
+      (add-watch-dir! watcher root-dir {:recursive false})
+       ;; with recursive off, we do still expect events to fire for these
+      (testing "expect events from"
+        (testing "creating an intermediate directory")
+        (testing "modifying intermediate directory")
+        (testing "deleting intermediate directory")
+
+        (testing "creating a file in root directory")
+        (testing "modifying a file in root directory")
+        (testing "deleting a file in root directory"))
+
+        ;; we expect no events to fire from any of these actions
+      (testing "expect no events from"
+        (testing "creating a file in intermediate directory")
+        (testing "modifying a file in intermediate directory")
+        (testing "deleting a file in intermedidate directory")
+
+        (testing "creating a directory in an intermediate directory")
+        (testing "modifying a directory in an intermediate directory")
+        (testing "deleting a directory in an intermediate directory"))))))
+
 (deftest ^:integration multiple-watch-dirs-test
   (testing "Watching of multiple directories using a single watcher"
     (with-app-with-config
