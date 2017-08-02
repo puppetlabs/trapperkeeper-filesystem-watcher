@@ -24,6 +24,12 @@
    (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
      (set/subset? events select-keys-set))))
 
+(defn exactly-matches-event?
+  [dest expected-event]
+   (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
+     (= expected-event select-keys-set)))
+
+
 (def wait-time
   "Number of milliseconds wait-for-events! should wait."
   (* 10 1000)) ;; 10 seconds
@@ -37,6 +43,25 @@
       (let [elapsed-time (- (System/currentTimeMillis) start-time)]
         (if (contains-events? dest events)
           events
+          (if (< elapsed-time wait-time)
+            (recur)
+            (do
+              (println "timed-out waiting for events")
+              @dest)))))))
+
+(defn wait-for-exactly-event
+  "Waits for event to land in dest. On first registered event or events in dest,
+  determines whether the registered event(s) match the supplied expected
+  event. If so, returns the expected event. Otherwise returns contents of dest."
+  [dest expected-event]
+  (let [start-time (System/currentTimeMillis)]
+    (loop []
+      (let [elapsed-time (- (System/currentTimeMillis) start-time)]
+
+        (if-not (empty? @dest)
+          (if (exactly-matches-event? dest expected-event)
+            expected-event
+            @dest)
           (if (< elapsed-time wait-time)
             (recur)
             (do
@@ -265,25 +290,54 @@
            canary-file (fs/file root-dir "canary")]
 
       (add-watch-dir! watcher root-dir {:recursive false})
-       ;; with recursive off, we do still expect events to fire for these
+      (add-callback! watcher callback)
+       ;; basic smoke test - ensure with recursive off we haven't broken expected event watching
       (testing "expect events from"
-        (testing "creating an intermediate directory")
-        (testing "modifying intermediate directory")
-        (testing "deleting intermediate directory")
+        (testing "creating an intermediate directory"
+          (fs/mkdirs intermediate-dir)
+          (let [events #{{:changed-path intermediate-dir
+                          :type :create}}]
+            (is (= events (wait-for-events results events)))))
+        (reset! results [])
+        (testing "creating a file in root directory"
+          (let [events #{{:changed-path canary-file
+                          :type :create}}]
+            (spit canary-file "foo")
+            (is (= events (wait-for-events results events)))))
 
-        (testing "creating a file in root directory")
-        (testing "modifying a file in root directory")
-        (testing "deleting a file in root directory"))
+        (reset! results [])
+        (testing "modifying a file in root directory"
+          (let [events #{{:changed-path canary-file
+                         :type :modify}}]
+            (spit canary-file "bar")
+            (is (= events (wait-for-events results events)))))
 
-        ;; we expect no events to fire from any of these actions
-      (testing "expect no events from"
-        (testing "creating a file in intermediate directory")
-        (testing "modifying a file in intermediate directory")
-        (testing "deleting a file in intermedidate directory")
+        (reset! results [])
+        (testing "deleting a file in root directory"
+          (let [events #{{:changed-path canary-file
+                         :type :delete}}]
+            (fs/delete canary-file)
+            (is (= events (wait-for-events results events))))))
 
-        (testing "creating a directory in an intermediate directory")
-        (testing "modifying a directory in an intermediate directory")
-        (testing "deleting a directory in an intermediate directory"))))))
+        ;; In these tests we expect --no events--. In order to (loosely)
+        ;; validate that events are firing as expected and our test isn't giving us
+        ;; false negatives, we also modify a canary file as a "control".
+      (testing "expect no events from nested directories"
+        (let [test-file (fs/file intermediate-dir "foo")]
+          (reset! results [])
+          (testing "creating a file in intermediate directory"
+            (let [event #{{:changed-path canary-file
+                            :type :create}}]
+              (spit test-file "foo") ;; expect no events
+              (spit canary-file "tweet") ;; control
+              (is (= event (wait-for-exactly-event results event)))))
+
+          (testing "modifying a file in intermediate directory")
+          (testing "deleting a file in intermedidate directory")
+
+          (testing "creating a directory in an intermediate directory")
+          (testing "modifying a directory in an intermediate directory")
+          (testing "deleting a directory in an intermediate directory")))))))
 
 (deftest ^:integration multiple-watch-dirs-test
   (testing "Watching of multiple directories using a single watcher"
