@@ -54,10 +54,10 @@
 
 (defn validate-watch-options!
   [options]
-  (when-not (= true (:recursive options))
+  (when-not (instance? Boolean (:recursive options))
     (throw
       (IllegalArgumentException.
-        (trs "Support for non-recursive directory watching not yet implemented")))))
+        (trs "Must pass a boolean value for :recursive (directory watching) option")))))
 
 (defrecord WatcherImpl
   [watch-service callbacks]
