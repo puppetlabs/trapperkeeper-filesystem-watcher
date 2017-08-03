@@ -59,14 +59,33 @@
       (IllegalArgumentException.
         (trs "Must pass a boolean value for :recursive (directory watching) option")))))
 
+(schema/defn set-final-recursive!
+  "Enforce only setting the recursive option for a watcher once, and fail on
+  attempted modification, given an atom representing the value of the recursive
+  setting for a watcher and a new boolean value."
+  [recursive :- Atom
+   recursive-option :- Boolean]
+  (if (nil? @recursive)
+    (reset! recursive recursive-option)
+    (when-not (= @recursive recursive-option)
+      (throw
+        (IllegalArgumentException.
+          (trs "Watcher already set to :recursive {0}, cannot change to :recursive {1}"
+            @recursive recursive-option))))))
+
 (defrecord WatcherImpl
-  [watch-service callbacks]
+  [watch-service callbacks recursive]
   Watcher
   (add-watch-dir!
     [this dir options]
     (validate-watch-options! options)
-    (DirWatchUtils/registerRecursive watch-service
-                                     [(.toPath (fs/file dir))]))
+    ;; the first directory we watch defines the recursive behavior of this watcher - once set it cannot be changed
+    (set-final-recursive! recursive (:recursive options))
+    (let [watched-path (.toPath (fs/file dir))]
+      (if recursive
+        (DirWatchUtils/registerRecursive watch-service [watched-path])
+        (DirWatchUtils/register watch-service watched-path))))
+
   (add-callback!
     [this callback]
     (swap! callbacks conj callback)))
@@ -75,9 +94,13 @@
   []
   (map->WatcherImpl
     {:watch-service (.newWatchService (FileSystems/getDefault))
-     :callbacks (atom [])}))
+     :callbacks (atom [])
+     :recursive (atom nil)}))
 
 (schema/defn watch-new-directories!
+  "Given an initial set of events and a watcher, identify any events that
+  represent the creation of a directory and register them with the watch service.
+  If no events are directory creations, nothing is registered."
   [events :- [Event]
    watcher :- (schema/protocol Watcher)]
   (let [dir-create? (fn [event]

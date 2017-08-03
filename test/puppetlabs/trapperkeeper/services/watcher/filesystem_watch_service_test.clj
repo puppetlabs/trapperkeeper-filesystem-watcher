@@ -532,6 +532,25 @@
           (is (= expected-events (wait-for-events actual-events expected-events)))
           (is (>= @callback-invocations 2)))))))
 
+(deftest ^:integration cannot-watch-recursive-and-not-recursive
+  (testing "Cannot watch directories recursively and non-recursively with same watcher"
+    (with-app-with-config
+     app [filesystem-watch-service] {}
+     (let [service (tk-app/get-service app :FilesystemWatchService)
+           watcher (create-watcher service)
+           results (atom [])
+           callback (make-callback results)
+           first-dir (fs/temp-dir "first")
+           second-dir (fs/temp-dir "second")
+           third-dir (fs/temp-dir "third")]
+
+      (add-watch-dir! watcher first-dir {:recursive false})
+      ;; adding another directory with the same recursive value is OK
+      (add-watch-dir! watcher second-dir {:recursive false})
+      ;; but adding another directory with a different recursive value should fail
+      (is (thrown-with-msg? IllegalArgumentException #"cannot change to :recursive true"
+            (add-watch-dir! watcher third-dir {:recursive true})))))))
+
 ;; Here we create a stub object that implements the WatchEvent interface as
 ;; the concrete class is a private inner class. See:
 ;; https://github.com/openjdk-mirror/jdk7u-jdk/blob/f4d80957e89a19a29bb9f9807d2a28351ed7f7df/src/share/classes/sun/nio/fs/AbstractWatchKey.java#L190-L222
