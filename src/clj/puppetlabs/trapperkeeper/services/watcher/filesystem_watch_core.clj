@@ -81,7 +81,8 @@
     (validate-watch-options! options)
     ;; the first directory we watch defines the recursive behavior of this watcher - once set it cannot be changed
     (set-final-recursive! recursive (:recursive options))
-    (let [watched-path (.toPath (fs/file dir))]
+    (let [recursive (:recursive options)
+          watched-path (.toPath (fs/file dir))]
       (if recursive
         (DirWatchUtils/registerRecursive watch-service [watched-path])
         (DirWatchUtils/register watch-service watched-path))))
@@ -124,14 +125,17 @@
   [watcher :- (schema/protocol Watcher)]
   (let [watch-key (.take (:watch-service watcher))
         initial-events (watch-key->events watch-key)
-        time-limit (+ (System/currentTimeMillis) window-max)]
-    (watch-new-directories! initial-events watcher)
+        time-limit (+ (System/currentTimeMillis) window-max)
+        recursive @(:recursive watcher)]
+    (when recursive
+      (watch-new-directories! initial-events watcher))
     (.reset watch-key)
     (if-not (empty? initial-events)
       (loop [events initial-events]
         (if-let [waiting-key (.poll (:watch-service watcher) window-min window-units)]
           (let [waiting-events (watch-key->events waiting-key)]
-            (watch-new-directories! waiting-events watcher)
+            (when recursive
+              (watch-new-directories! waiting-events watcher))
             (.reset waiting-key)
             (if (< (System/currentTimeMillis) time-limit)
               (recur (concat events waiting-events))

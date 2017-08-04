@@ -295,6 +295,8 @@
       (testing "expect events from"
         (testing "creating an intermediate directory"
           (fs/mkdirs intermediate-dir)
+          ;; also make the nested-directory we'll use for testing later
+          (fs/mkdirs nested-dir)
           (let [events #{{:changed-path intermediate-dir
                           :type :create}}]
             (is (= events (wait-for-events results events)))))
@@ -319,25 +321,50 @@
             (fs/delete canary-file)
             (is (= events (wait-for-events results events))))))
 
-        ;; In these tests we expect --no events--. In order to (loosely)
+        ;; In these tests we expect events --not-- to occur. In order to (loosely)
         ;; validate that events are firing as expected and our test isn't giving us
         ;; false negatives, we also modify a canary file as a "control".
       (testing "expect no events from nested directories"
-        (let [test-file (fs/file intermediate-dir "foo")]
+        (let [nested-file (fs/file nested-dir "nested file")]
           (reset! results [])
-          (testing "creating a file in intermediate directory"
+          (testing "creating a file in a nested directory"
             (let [event #{{:changed-path canary-file
                             :type :create}}]
-              (spit test-file "foo") ;; expect no events
-              (spit canary-file "tweet") ;; control
+              (spit nested-file "foo") ;; expect no events from
+              (spit canary-file "foo") ;; control
               (is (= event (wait-for-exactly-event results event)))))
 
-          (testing "modifying a file in intermediate directory")
-          (testing "deleting a file in intermedidate directory")
+          (reset! results [])
+          (testing "modifying a file in nested directory"
+            (let [event #{{:changed-path canary-file
+                            :type :modify}}]
+              (spit nested-file "foo")
+              (spit canary-file "bar")
+              (is (= event (wait-for-exactly-event results event)))))
 
-          (testing "creating a directory in an intermediate directory")
-          (testing "modifying a directory in an intermediate directory")
-          (testing "deleting a directory in an intermediate directory")))))))
+          (reset! results [])
+          (testing "deleting a file in nested directory"
+            (let [event #{{:changed-path canary-file
+                            :type :modify}}]
+              (fs/delete nested-file)
+              (spit canary-file "baz")
+              (is (= event (wait-for-exactly-event results event)))))
+
+          (reset! results [])
+          (testing "creating a directory in a nested directory"
+            (let [event #{{:changed-path canary-file
+                            :type :modify}}]
+              (fs/mkdirs (fs/file nested-dir "foo"))
+              (spit canary-file "qux")
+              (is (= event (wait-for-exactly-event results event)))))
+
+          (reset! results [])
+          (testing "deleting a directory in a nested directory"
+            (let [event #{{:changed-path canary-file
+                            :type :modify}}]
+              (fs/delete-dir (fs/file nested-dir "foo"))
+              (spit canary-file "quux")
+              (is (= event (wait-for-exactly-event results event)))))))))))
 
 (deftest ^:integration multiple-watch-dirs-test
   (testing "Watching of multiple directories using a single watcher"
