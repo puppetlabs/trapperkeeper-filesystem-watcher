@@ -331,7 +331,7 @@
             (let [event #{{:changed-path canary-file
                             :type :create}}]
               (spit nested-file "foo") ;; expect no events from
-              (spit canary-file "foo") ;; control
+              (fs/touch canary-file) ;; control
               (is (= event (wait-for-exactly-event results event)))))
 
           (reset! results [])
