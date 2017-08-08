@@ -281,7 +281,7 @@
     (with-app-with-config
      app [filesystem-watch-service] {}
      (let [service (tk-app/get-service app :FilesystemWatchService)
-           watcher (create-watcher service)
+           watcher (create-watcher service {:recursive false})
            results (atom [])
            callback (make-callback results)
            root-dir (fs/temp-dir "root-dir")
@@ -289,7 +289,7 @@
            nested-dir (fs/file intermediate-dir "nested-dir")
            canary-file (fs/file root-dir "canary")]
 
-      (add-watch-dir! watcher root-dir {:recursive false})
+      (add-watch-dir! watcher root-dir)
       (add-callback! watcher callback)
        ;; basic smoke test - ensure with recursive off we haven't broken expected event watching
       (testing "expect events from"
@@ -564,19 +564,16 @@
     (with-app-with-config
      app [filesystem-watch-service] {}
      (let [service (tk-app/get-service app :FilesystemWatchService)
-           watcher (create-watcher service)
+           watcher (create-watcher service {:recursive false})
            results (atom [])
            callback (make-callback results)
            first-dir (fs/temp-dir "first")
-           second-dir (fs/temp-dir "second")
-           third-dir (fs/temp-dir "third")]
-
-      (add-watch-dir! watcher first-dir {:recursive false})
+           second-dir (fs/temp-dir "second")]
       ;; adding another directory with the same recursive value is OK
-      (add-watch-dir! watcher second-dir {:recursive false})
+      (add-watch-dir! watcher first-dir {:recursive false})
       ;; but adding another directory with a different recursive value should fail
       (is (thrown-with-msg? IllegalArgumentException #"cannot change to :recursive true"
-            (add-watch-dir! watcher third-dir {:recursive true})))))))
+            (add-watch-dir! watcher second-dir {:recursive true})))))))
 
 ;; Here we create a stub object that implements the WatchEvent interface as
 ;; the concrete class is a private inner class. See:

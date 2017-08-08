@@ -4,7 +4,7 @@
             [schema.core :as schema]
             [puppetlabs.i18n.core :refer [trs]]
             [puppetlabs.kitchensink.core :as ks]
-            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [Event Watcher]])
+            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [Event Watcher] :as watch-protocol])
   (:import (clojure.lang Atom IFn)
            (java.nio.file StandardWatchEventKinds Path WatchEvent WatchKey FileSystems ClosedWatchServiceException)
            (com.puppetlabs DirWatchUtils)))
@@ -53,50 +53,48 @@
        :changed-path (.. watched-path (resolve (.context event)) (toFile))})))
 
 (defn validate-watch-options!
+  "Validate that the options supplied include a valid Boolean value for key :recursive."
   [options]
   (when-not (instance? Boolean (:recursive options))
     (throw
       (IllegalArgumentException.
         (trs "Must pass a boolean value for :recursive (directory watching) option")))))
 
-(schema/defn set-final-recursive!
-  "Enforce only setting the recursive option for a watcher once, and fail on
-  attempted modification, given an atom representing the value of the recursive
-  setting for a watcher and a new boolean value."
-  [recursive :- Atom
-   recursive-option :- Boolean]
-  (if (nil? @recursive)
-    (reset! recursive recursive-option)
-    (when-not (= @recursive recursive-option)
-      (throw
-        (IllegalArgumentException.
-          (trs "Watcher already set to :recursive {0}, cannot change to :recursive {1}"
-            @recursive recursive-option))))))
-
 (defrecord WatcherImpl
   [watch-service callbacks recursive]
   Watcher
   (add-watch-dir!
-    [this dir options]
-    (validate-watch-options! options)
-    ;; the first directory we watch defines the recursive behavior of this watcher - once set it cannot be changed
-    (set-final-recursive! recursive (:recursive options))
-    (let [recursive (:recursive options)
-          watched-path (.toPath (fs/file dir))]
-      (if recursive
+    [this dir]
+    (let [watched-path (.toPath (fs/file dir))]
+      (if @recursive
         (DirWatchUtils/registerRecursive watch-service [watched-path])
         (DirWatchUtils/register watch-service watched-path))))
+
+  (add-watch-dir!
+    [this dir options]
+    (validate-watch-options! options)
+    ;; The value of recursive was already set by `create-watcher`, possibly by specifying an option.
+    ;; We validate that the option supplied to `add-watch-dir!` has the same value.
+    (when-not (= @recursive (:recursive options))
+      (throw
+        (IllegalArgumentException.
+          (trs "Watcher already set to :recursive {0}, cannot change to :recursive {1}"
+            @recursive (:recursive options)))))
+    (watch-protocol/add-watch-dir! this dir))
 
   (add-callback!
     [this callback]
     (swap! callbacks conj callback)))
 
 (defn create-watcher
-  []
-  (map->WatcherImpl
-    {:watch-service (.newWatchService (FileSystems/getDefault))
-     :callbacks (atom [])
-     :recursive (atom nil)}))
+  ([]
+   (create-watcher {:recursive true}))
+  ([options]
+    (validate-watch-options! options)
+    (map->WatcherImpl
+      {:watch-service (.newWatchService (FileSystems/getDefault))
+      :callbacks (atom [])
+      :recursive (atom (:recursive options))})))
 
 (schema/defn watch-new-directories!
   "Given an initial set of events and a watcher, identify any events that
