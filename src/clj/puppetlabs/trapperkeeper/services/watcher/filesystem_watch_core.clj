@@ -89,12 +89,12 @@
 (defn create-watcher
   ([]
    (create-watcher {:recursive true}))
-  ([options]
+  ([{:keys [recursive] :as options}]
    (validate-watch-options! options)
    (map->WatcherImpl
      {:watch-service (.newWatchService (FileSystems/getDefault))
       :callbacks (atom [])
-      :recursive (atom (:recursive options))})))
+      :recursive (atom recursive)})))
 
 (schema/defn watch-new-directories!
   "Given an initial set of events and a watcher, identify any events that
