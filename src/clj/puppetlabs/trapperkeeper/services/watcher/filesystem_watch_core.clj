@@ -75,6 +75,8 @@
     (validate-watch-options! options)
     ;; The value of recursive was already set by `create-watcher`, possibly by specifying an option.
     ;; We validate that the option supplied to `add-watch-dir!` has the same value.
+    (log/debug
+      (trs "Passing options to `add-watch-dir!` is deprecated. Pass options to `create-watcher` instead"))
     (when-not (= @recursive (:recursive options))
       (throw
         (IllegalArgumentException.
