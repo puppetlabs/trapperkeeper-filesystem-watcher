@@ -25,14 +25,14 @@
     context)
 
   (create-watcher
-   [this]
-   (create-watcher this {:recursive true}))
+    [this]
+    (create-watcher this {:recursive true}))
 
   (create-watcher
-   [this options]
-   (let [{:keys [watchers]} (tk/service-context this)
-         watcher (watch-core/create-watcher options)
-         shutdown-fn (partial shutdown-on-error (tk/service-id this))]
-     (watch-core/watch! watcher shutdown-fn)
-     (swap! watchers conj watcher)
-     watcher)))
+    [this options]
+    (let [{:keys [watchers]} (tk/service-context this)
+          watcher (watch-core/create-watcher options)
+          shutdown-fn (partial shutdown-on-error (tk/service-id this))]
+      (watch-core/watch! watcher shutdown-fn)
+      (swap! watchers conj watcher)
+      watcher)))

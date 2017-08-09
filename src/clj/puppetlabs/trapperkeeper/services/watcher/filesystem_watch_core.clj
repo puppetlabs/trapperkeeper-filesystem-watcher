@@ -79,7 +79,7 @@
       (throw
         (IllegalArgumentException.
           (trs "Watcher already set to :recursive {0}, cannot change to :recursive {1}"
-            @recursive (:recursive options)))))
+               @recursive (:recursive options)))))
     (watch-protocol/add-watch-dir! this dir))
 
   (add-callback!
@@ -90,9 +90,9 @@
   ([]
    (create-watcher {:recursive true}))
   ([options]
-    (validate-watch-options! options)
-    (map->WatcherImpl
-      {:watch-service (.newWatchService (FileSystems/getDefault))
+   (validate-watch-options! options)
+   (map->WatcherImpl
+     {:watch-service (.newWatchService (FileSystems/getDefault))
       :callbacks (atom [])
       :recursive (atom (:recursive options))})))
 

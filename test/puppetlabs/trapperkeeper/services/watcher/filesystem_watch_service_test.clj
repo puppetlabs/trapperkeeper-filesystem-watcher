@@ -20,14 +20,14 @@
     (swap! dest concat events)))
 
 (defn contains-events?
-  ([dest events]
-   (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
-     (set/subset? events select-keys-set))))
+  [dest events]
+  (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
+     (set/subset? events select-keys-set)))
 
 (defn exactly-matches-event?
   [dest expected-event]
-   (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
-     (= expected-event select-keys-set)))
+  (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
+    (= expected-event select-keys-set)))
 
 
 (def wait-time
@@ -57,7 +57,6 @@
   (let [start-time (System/currentTimeMillis)]
     (loop []
       (let [elapsed-time (- (System/currentTimeMillis) start-time)]
-
         (if-not (empty? @dest)
           (if (exactly-matches-event? dest expected-event)
             expected-event
@@ -279,8 +278,8 @@
 (deftest ^:integration recurse-false-test
   (testing "Watching of nested directories with recursive disabled"
     (with-app-with-config
-     app [filesystem-watch-service] {}
-     (let [service (tk-app/get-service app :FilesystemWatchService)
+      app [filesystem-watch-service] {}
+      (let [service (tk-app/get-service app :FilesystemWatchService)
            watcher (create-watcher service {:recursive false})
            results (atom [])
            callback (make-callback results)
@@ -572,7 +571,9 @@
       ;; adding another directory with the same recursive value is OK
       (add-watch-dir! watcher first-dir {:recursive false})
       ;; but adding another directory with a different recursive value should fail
-      (is (thrown-with-msg? IllegalArgumentException #"cannot change to :recursive true"
+      (is (thrown-with-msg?
+            IllegalArgumentException
+            #"cannot change to :recursive true"
             (add-watch-dir! watcher second-dir {:recursive true})))))))
 
 ;; Here we create a stub object that implements the WatchEvent interface as
