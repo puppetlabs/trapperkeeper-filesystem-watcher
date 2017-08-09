@@ -55,17 +55,16 @@
   event. If so, returns the expected event. Otherwise returns contents of dest."
   [dest expected-event]
   (let [start-time (System/currentTimeMillis)]
-    (loop []
-      (let [elapsed-time (- (System/currentTimeMillis) start-time)]
-        (if-not (empty? @dest)
-          (if (exactly-matches-event? dest expected-event)
-            expected-event
-            @dest)
-          (if (< elapsed-time wait-time)
-            (recur)
-            (do
-              (println "timed-out waiting for events")
-              @dest)))))))
+    (loop [elapsed-time 0]
+      (if-not (empty? @dest)
+        (if (exactly-matches-event? dest expected-event)
+          expected-event
+          @dest)
+        (if (< elapsed-time wait-time)
+          (recur (- (System/currentTimeMillis) start-time))
+          (do
+            (println "timed-out waiting for events")
+            @dest))))))
 
 (defn watch!*
   [watcher root callback]
