@@ -20,9 +20,15 @@
     (swap! dest concat events)))
 
 (defn contains-events?
-  ([dest events]
-   (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
-     (set/subset? events select-keys-set))))
+  [dest events]
+  (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
+     (set/subset? events select-keys-set)))
+
+(defn exactly-matches-event?
+  [dest expected-event]
+  (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
+    (= expected-event select-keys-set)))
+
 
 (def wait-time
   "Number of milliseconds wait-for-events! should wait."
@@ -42,6 +48,23 @@
             (do
               (println "timed-out waiting for events")
               @dest)))))))
+
+(defn wait-for-exactly-event
+  "Waits for event to land in dest. On first registered event or events in dest,
+  determines whether the registered event(s) match the supplied expected
+  event. If so, returns the expected event. Otherwise returns contents of dest."
+  [dest expected-event]
+  (let [start-time (System/currentTimeMillis)]
+    (loop [elapsed-time 0]
+      (if-not (empty? @dest)
+        (if (exactly-matches-event? dest expected-event)
+          expected-event
+          @dest)
+        (if (< elapsed-time wait-time)
+          (recur (- (System/currentTimeMillis) start-time))
+          (do
+            (println "timed-out waiting for events")
+            @dest))))))
 
 (defn watch!*
   [watcher root callback]
@@ -251,6 +274,96 @@
                              :type :delete}}]
                (is (= events (wait-for-events results events)))))))))))
 
+(deftest ^:integration recurse-false-test
+  (testing "Watching of nested directories with recursive disabled"
+    (with-app-with-config
+      app [filesystem-watch-service] {}
+      (let [service (tk-app/get-service app :FilesystemWatchService)
+           watcher (create-watcher service {:recursive false})
+           results (atom [])
+           callback (make-callback results)
+           root-dir (fs/temp-dir "root-dir")
+           intermediate-dir (fs/file root-dir "intermediate-dir")
+           nested-dir (fs/file intermediate-dir "nested-dir")
+           canary-file (fs/file root-dir "canary")]
+
+      (add-watch-dir! watcher root-dir)
+      (add-callback! watcher callback)
+       ;; basic smoke test - ensure with recursive off we haven't broken expected event watching
+      (testing "expect events from"
+        (testing "creating an intermediate directory"
+          (fs/mkdirs intermediate-dir)
+          ;; also make the nested-directory we'll use for testing later
+          (fs/mkdirs nested-dir)
+          (let [events #{{:changed-path intermediate-dir
+                          :type :create}}]
+            (is (= events (wait-for-events results events)))))
+        (reset! results [])
+        (testing "creating a file in root directory"
+          (let [events #{{:changed-path canary-file
+                          :type :create}}]
+            (spit canary-file "foo")
+            (is (= events (wait-for-events results events)))))
+
+        (reset! results [])
+        (testing "modifying a file in root directory"
+          (let [events #{{:changed-path canary-file
+                         :type :modify}}]
+            (spit canary-file "bar")
+            (is (= events (wait-for-events results events)))))
+
+        (reset! results [])
+        (testing "deleting a file in root directory"
+          (let [events #{{:changed-path canary-file
+                         :type :delete}}]
+            (fs/delete canary-file)
+            (is (= events (wait-for-events results events))))))
+
+        ;; In these tests we expect events --not-- to occur. In order to (loosely)
+        ;; validate that events are firing as expected and our test isn't giving us
+        ;; false negatives, we also modify a canary file as a "control".
+      (testing "expect no events from nested directories"
+        (let [nested-file (fs/file nested-dir "nested file")]
+          (reset! results [])
+          (testing "creating a file in a nested directory"
+            (let [event #{{:changed-path canary-file
+                            :type :create}}]
+              (spit nested-file "foo") ;; expect no events from
+              (fs/touch canary-file) ;; control
+              (is (= event (wait-for-exactly-event results event)))))
+
+          (reset! results [])
+          (testing "modifying a file in nested directory"
+            (let [event #{{:changed-path canary-file
+                            :type :modify}}]
+              (spit nested-file "foo")
+              (spit canary-file "bar")
+              (is (= event (wait-for-exactly-event results event)))))
+
+          (reset! results [])
+          (testing "deleting a file in nested directory"
+            (let [event #{{:changed-path canary-file
+                            :type :modify}}]
+              (fs/delete nested-file)
+              (spit canary-file "baz")
+              (is (= event (wait-for-exactly-event results event)))))
+
+          (reset! results [])
+          (testing "creating a directory in a nested directory"
+            (let [event #{{:changed-path canary-file
+                            :type :modify}}]
+              (fs/mkdirs (fs/file nested-dir "foo"))
+              (spit canary-file "qux")
+              (is (= event (wait-for-exactly-event results event)))))
+
+          (reset! results [])
+          (testing "deleting a directory in a nested directory"
+            (let [event #{{:changed-path canary-file
+                            :type :modify}}]
+              (fs/delete-dir (fs/file nested-dir "foo"))
+              (spit canary-file "quux")
+              (is (= event (wait-for-exactly-event results event)))))))))))
+
 (deftest ^:integration multiple-watch-dirs-test
   (testing "Watching of multiple directories using a single watcher"
     (with-app-with-config
@@ -443,6 +556,24 @@
           (doseq [f files] (fs/touch f) (Thread/sleep event-cadence))
           (is (= expected-events (wait-for-events actual-events expected-events)))
           (is (>= @callback-invocations 2)))))))
+
+(deftest ^:integration cannot-watch-recursive-and-not-recursive
+  (testing "Cannot watch directories recursively and non-recursively with same watcher"
+    (with-app-with-config
+     app [filesystem-watch-service] {}
+     (let [service (tk-app/get-service app :FilesystemWatchService)
+           watcher (create-watcher service {:recursive false})
+           results (atom [])
+           callback (make-callback results)
+           first-dir (fs/temp-dir "first")
+           second-dir (fs/temp-dir "second")]
+      ;; adding another directory with the same recursive value is OK
+      (add-watch-dir! watcher first-dir {:recursive false})
+      ;; but adding another directory with a different recursive value should fail
+      (is (thrown-with-msg?
+            IllegalArgumentException
+            #"cannot change to :recursive true"
+            (add-watch-dir! watcher second-dir {:recursive true})))))))
 
 ;; Here we create a stub object that implements the WatchEvent interface as
 ;; the concrete class is a private inner class. See:

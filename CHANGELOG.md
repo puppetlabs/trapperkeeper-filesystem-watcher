@@ -1,3 +1,11 @@
+# 1.1.0
+
+- (TK-448) (Feature release) Add support for non-recursive directory watching.
+  Adds the ability to watch only the contents of a given directory and not the
+  contents of sub-directories. Deprecates specifying this option on the
+  `add-watch-dir!` function, and adds support for it to the `create-watcher`
+  function.
+
 # 1.0.1
 
  - (maint) Fixes a long running, subtle bug in which we discard the trapperkeeper context on init

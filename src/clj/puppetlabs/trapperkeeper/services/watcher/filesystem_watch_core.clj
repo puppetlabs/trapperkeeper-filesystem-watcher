@@ -4,7 +4,7 @@
             [schema.core :as schema]
             [puppetlabs.i18n.core :refer [trs]]
             [puppetlabs.kitchensink.core :as ks]
-            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [Event Watcher]])
+            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [Event Watcher] :as watch-protocol])
   (:import (clojure.lang Atom IFn)
            (java.nio.file StandardWatchEventKinds Path WatchEvent WatchKey FileSystems ClosedWatchServiceException)
            (com.puppetlabs DirWatchUtils)))
@@ -53,31 +53,55 @@
        :changed-path (.. watched-path (resolve (.context event)) (toFile))})))
 
 (defn validate-watch-options!
+  "Validate that the options supplied include a valid Boolean value for key :recursive."
   [options]
-  (when-not (= true (:recursive options))
+  (when-not (instance? Boolean (:recursive options))
     (throw
       (IllegalArgumentException.
-        (trs "Support for non-recursive directory watching not yet implemented")))))
+        (trs "Must pass a boolean value for :recursive (directory watching) option")))))
 
 (defrecord WatcherImpl
-  [watch-service callbacks]
+  [watch-service callbacks recursive]
   Watcher
+  (add-watch-dir!
+    [this dir]
+    (let [watched-path (.toPath (fs/file dir))]
+      (if @recursive
+        (DirWatchUtils/registerRecursive watch-service [watched-path])
+        (DirWatchUtils/register watch-service watched-path))))
+
   (add-watch-dir!
     [this dir options]
     (validate-watch-options! options)
-    (DirWatchUtils/registerRecursive watch-service
-                                     [(.toPath (fs/file dir))]))
+    ;; The value of recursive was already set by `create-watcher`, possibly by specifying an option.
+    ;; We validate that the option supplied to `add-watch-dir!` has the same value.
+    (log/debug
+      (trs "Passing options to `add-watch-dir!` is deprecated. Pass options to `create-watcher` instead"))
+    (when-not (= @recursive (:recursive options))
+      (throw
+        (IllegalArgumentException.
+          (trs "Watcher already set to :recursive {0}, cannot change to :recursive {1}"
+               @recursive (:recursive options)))))
+    (watch-protocol/add-watch-dir! this dir))
+
   (add-callback!
     [this callback]
     (swap! callbacks conj callback)))
 
 (defn create-watcher
-  []
-  (map->WatcherImpl
-    {:watch-service (.newWatchService (FileSystems/getDefault))
-     :callbacks (atom [])}))
+  ([]
+   (create-watcher {:recursive true}))
+  ([{:keys [recursive] :as options}]
+   (validate-watch-options! options)
+   (map->WatcherImpl
+     {:watch-service (.newWatchService (FileSystems/getDefault))
+      :callbacks (atom [])
+      :recursive (atom recursive)})))
 
 (schema/defn watch-new-directories!
+  "Given an initial set of events and a watcher, identify any events that
+  represent the creation of a directory and register them with the watch service.
+  If no events are directory creations, nothing is registered."
   [events :- [Event]
    watcher :- (schema/protocol Watcher)]
   (let [dir-create? (fn [event]
@@ -101,14 +125,17 @@
   [watcher :- (schema/protocol Watcher)]
   (let [watch-key (.take (:watch-service watcher))
         initial-events (watch-key->events watch-key)
-        time-limit (+ (System/currentTimeMillis) window-max)]
-    (watch-new-directories! initial-events watcher)
+        time-limit (+ (System/currentTimeMillis) window-max)
+        recursive @(:recursive watcher)]
+    (when recursive
+      (watch-new-directories! initial-events watcher))
     (.reset watch-key)
     (if-not (empty? initial-events)
       (loop [events initial-events]
         (if-let [waiting-key (.poll (:watch-service watcher) window-min window-units)]
           (let [waiting-events (watch-key->events waiting-key)]
-            (watch-new-directories! waiting-events watcher)
+            (when recursive
+              (watch-new-directories! waiting-events watcher))
             (.reset waiting-key)
             (if (< (System/currentTimeMillis) time-limit)
               (recur (concat events waiting-events))

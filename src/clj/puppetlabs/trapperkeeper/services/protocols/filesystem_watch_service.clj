@@ -14,11 +14,13 @@
      :changed-path File}))
 
 (defprotocol Watcher
-  (add-watch-dir! [this dir options]
+  (add-watch-dir! [this dir] [this dir options]
     "Given a directory on the filesystem, initiate watching of dir.  The
     watcher's callbacks will be invoked when dir changes.  Available options are:
-      * :recursive true   - If true, callbacks will be invoked when dir or any
-                            file underneath dir changes.
+      * :recursive true   - [deprecated] If true, callbacks will be invoked when dir or any file
+                            underneath dir changes. Passing options to this function is deprecated -
+                            pass `recursive` option to create-watcher function of the
+                            FilesystemWatchService protocol instead.
 
     When dir is deleted, the behavior is unspecified, left up to the
     implementation, and may be platform-specific.")
@@ -39,6 +41,12 @@
     changed file."))
 
 (defprotocol FilesystemWatchService
-  (create-watcher [this]
+  (create-watcher [this] [this options]
     "Returns a Watcher which can be used to initiate watching of a directory on
-    the filesystem."))
+    the filesystem. Available options are:
+      * :recursive (true | false) - If true, callbacks will be invoked when dir or any file
+                                    underneath dir, including files within nested directories of
+                                    dir, changes. If false, callbacks will be invoked when any
+                                    file inside of dir changes. Note that on some implementations,
+                                    modifying the contents of a directory is considered a change
+                                    to the directory itself (platform-specific)".))
