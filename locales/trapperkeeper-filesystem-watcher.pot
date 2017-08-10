@@ -1,12 +1,13 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR Puppet <docs@puppet.com>
-# This file is distributed under the same license as the puppetlabs.trapperkeeper_filesystem_watcher package.
+# This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
 #, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: puppetlabs.trapperkeeper_filesystem_watcher \n"
+"X-Git-Ref: da5a414afc1fd6844576fb2841150435d1ab0f8c\n"
 "Report-Msgid-Bugs-To: docs@puppet.com\n"
 "POT-Creation-Date: \n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
@@ -18,7 +19,17 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 #: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
-msgid "Support for non-recursive directory watching not yet implemented"
+msgid "Must pass a boolean value for :recursive (directory watching) option"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
+msgid ""
+"Passing options to `add-watch-dir!` is deprecated. Pass options to `create-"
+"watcher` instead"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
+msgid "Watcher already set to :recursive {0}, cannot change to :recursive {1}"
 msgstr ""
 
 #: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
