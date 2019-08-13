@@ -1,14 +1,8 @@
 language: clojure
-lein: 2.7.1
+lein: 2.9.1
 jdk:
-  - oraclejdk8
+  - openjdk8
+  - openjdk11
 script: ./ext/travisci/test.sh
 notifications:
   email: false
-
-# workaround for buffer overflow issue, ref https://github.com/travis-ci/travis-ci/issues/5227
-before_install:
-  - cat /etc/hosts # optionally check the content *before*
-  - sudo hostname "$(hostname | cut -c1-63)"
-  - sed -e "s/^\\(127\\.0\\.0\\.1.*\\)/\\1 $(hostname | cut -c1-63)/" /etc/hosts | sudo tee /etc/hosts
-  - cat /etc/hosts # optionally check the content *after*

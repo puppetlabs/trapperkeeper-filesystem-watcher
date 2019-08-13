@@ -1,12 +1,12 @@
-(defproject puppetlabs/trapperkeeper-filesystem-watcher "1.1.1-SNAPSHOT"
+(defproject puppetlabs/trapperkeeper-filesystem-watcher "1.2.0-SNAPSHOT"
   :description "Trapperkeeper filesystem watcher service"
   :url "https://github.com/puppetlabs/trapperkeeper-filesystem-watcher"
   :license {:name "Apache License, Version 2.0"
             :url "http://www.apache.org/licenses/LICENSE-2.0"}
 
-  :min-lein-version "2.7.1"
+  :min-lein-version "2.9.1"
 
-  :parent-project  {:coords [puppetlabs/clj-parent "0.4.3"]
+  :parent-project  {:coords [puppetlabs/clj-parent "4.0.2"]
                     :inherit [:managed-dependencies]}
 
   :pedantic? :abort
@@ -16,7 +16,7 @@
   :dependencies [[org.clojure/clojure]
                  [org.clojure/tools.logging]
                  [prismatic/schema]
-                 [me.raynes/fs]
+                 [clj-commons/fs]
                  [puppetlabs/trapperkeeper]
                  [puppetlabs/kitchensink]
                  [puppetlabs/i18n]]
@@ -36,8 +36,8 @@
                                    :classifier "test"
                                    :scope "test"]]}}
 
-  :plugins  [[lein-parent "0.3.1"]
-             [puppetlabs/i18n "0.7.1"]]
+  :plugins  [[lein-parent "0.3.7"]
+             [puppetlabs/i18n "0.8.0"]]
 
   :main puppetlabs.trapperkeeper.main
 )
