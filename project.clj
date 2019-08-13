@@ -1,4 +1,4 @@
-(defproject puppetlabs/trapperkeeper-filesystem-watcher "1.2.0"
+(defproject puppetlabs/trapperkeeper-filesystem-watcher "1.2.1-SNAPSHOT"
   :description "Trapperkeeper filesystem watcher service"
   :url "https://github.com/puppetlabs/trapperkeeper-filesystem-watcher"
   :license {:name "Apache License, Version 2.0"
