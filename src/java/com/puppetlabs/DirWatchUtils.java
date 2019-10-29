@@ -49,6 +49,18 @@ public class DirWatchUtils {
                     register(watcher, dir);
                     return FileVisitResult.CONTINUE;
                 }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException exc)
+                        throws IOException {
+                     if (exc instanceof java.nio.file.NoSuchFileException) {
+                         // The file may have disappeared since we started traversing,
+                         // (e.g. a lockfile getting cleaned up), ignore it and continue.
+                         return FileVisitResult.CONTINUE;
+                     } else {
+                         throw exc;
+                     }
+                }
             });
         }
     }
