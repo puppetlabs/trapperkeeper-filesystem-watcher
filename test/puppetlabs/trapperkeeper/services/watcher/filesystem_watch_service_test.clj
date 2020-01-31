@@ -10,7 +10,10 @@
             [puppetlabs.trapperkeeper.testutils.logging :refer [with-test-logging]]
             [puppetlabs.trapperkeeper.core :as tk]
             [puppetlabs.trapperkeeper.app :as tk-app]
-            [puppetlabs.trapperkeeper.internal :as tk-internal]))
+            [puppetlabs.trapperkeeper.internal :as tk-internal])
+  (:import (com.puppetlabs DirWatchUtils)
+           (java.net URI)
+           (java.nio.file FileSystems FileSystem Paths)))
 
 (use-fixtures :once schema-test/validate-schemas)
 
@@ -591,3 +594,11 @@
           expected {:type :unknown :count 1 :watched-path (.toFile watch-path)}]
       (testing "overflow events are handled normally"
         (is (= expected (watch-core/clojurize overflow-event watch-path)))))))
+
+(deftest gracefully-handles-tmpdirs
+  (testing "Does not fail if directory disappears when attempting to register"
+    (with-test-logging
+      (DirWatchUtils/register
+                 (.newWatchService (FileSystems/getDefault))
+                 (Paths/get (URI. "file:///etc/foobar/baznoid")))
+      (is (logged? #"Failed to register.*/etc/foobar/baznoid")))))
