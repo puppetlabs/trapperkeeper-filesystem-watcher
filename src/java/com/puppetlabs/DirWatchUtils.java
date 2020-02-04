@@ -26,11 +26,17 @@ public class DirWatchUtils {
      */
     public static void register(final WatchService watcher,
                                 final Path dir) throws IOException {
-        dir.register(watcher,  new WatchEvent.Kind[]{
-                StandardWatchEventKinds.ENTRY_MODIFY,
-                StandardWatchEventKinds.ENTRY_CREATE,
-                StandardWatchEventKinds.ENTRY_DELETE},
-                SensitivityWatchEventModifier.HIGH);
+	try {
+            dir.register(watcher,  new WatchEvent.Kind[]{
+                    StandardWatchEventKinds.ENTRY_MODIFY,
+                    StandardWatchEventKinds.ENTRY_CREATE,
+                    StandardWatchEventKinds.ENTRY_DELETE},
+                    SensitivityWatchEventModifier.HIGH);
+	} catch (NoSuchFileException ex) {
+	    log.warn(String.format("Failed to register watcher for path '%s'. Encountered error: %s",
+		    dir.toString(),
+		    ex.toString()));
+	}
     }
 
     /**
