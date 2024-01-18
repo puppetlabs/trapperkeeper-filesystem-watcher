@@ -5,8 +5,9 @@
             [puppetlabs.i18n.core :refer [trs]]
             [puppetlabs.kitchensink.core :as ks]
             [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [Event Watcher] :as watch-protocol])
-  (:import (clojure.lang Atom IFn)
-           (java.nio.file StandardWatchEventKinds Path WatchEvent WatchKey FileSystems ClosedWatchServiceException)
+  (:import (clojure.lang IFn)
+           (java.io File)
+           (java.nio.file StandardWatchEventKinds Path WatchEvent WatchKey FileSystems ClosedWatchServiceException WatchService)
            (com.puppetlabs DirWatchUtils)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -50,7 +51,7 @@
       {:type kind
        :count count
        :watched-path (.toFile watched-path)
-       :changed-path (.. watched-path (resolve (.context event)) (toFile))})))
+       :changed-path (.. watched-path (resolve ^Path (.context event)) (toFile))})))
 
 (defn validate-watch-options!
   "Validate that the options supplied include a valid Boolean value for key :recursive."
@@ -64,7 +65,7 @@
   [watch-service callbacks recursive]
   Watcher
   (add-watch-dir!
-    [this dir]
+    [_this dir]
     (let [watched-path (.toPath (fs/file dir))]
       (if @recursive
         (DirWatchUtils/registerRecursive watch-service [watched-path])
@@ -85,7 +86,7 @@
     (watch-protocol/add-watch-dir! this dir))
 
   (add-callback!
-    [this callback]
+    [_this callback]
     (swap! callbacks conj callback)))
 
 (defn create-watcher
@@ -107,10 +108,10 @@
   (let [dir-create? (fn [event]
                       (and (= :create (:type event))
                            (fs/directory? (:changed-path event))))]
-    (DirWatchUtils/registerRecursive (:watch-service watcher)
+    (DirWatchUtils/registerRecursive ^WatchService (:watch-service watcher)
                                      (->> events
                                           (filter dir-create?)
-                                          (map #(.toPath (:changed-path %)))))))
+                                          (map #(.toPath ^File (:changed-path %)))))))
 
 (schema/defn watch-key->events :- [Event]
   [watch-key :- WatchKey]
@@ -123,7 +124,8 @@
   occur. Will continue polling for as long as there are new events that occur
   within `window-min`, or the `window-max` time limit has been exceeded."
   [watcher :- (schema/protocol Watcher)]
-  (let [watch-key (.take (:watch-service watcher))
+  (let [^WatchService watch-service (:watch-service watcher)
+        watch-key (.take watch-service)
         initial-events (watch-key->events watch-key)
         time-limit (+ (System/currentTimeMillis) window-max)
         recursive @(:recursive watcher)]
@@ -132,7 +134,7 @@
     (.reset watch-key)
     (if-not (empty? initial-events)
       (loop [events initial-events]
-        (if-let [waiting-key (.poll (:watch-service watcher) window-min window-units)]
+        (if-let [waiting-key (.poll watch-service window-min window-units)]
           (let [waiting-events (watch-key->events waiting-key)]
             (when recursive
               (watch-new-directories! waiting-events watcher))
@@ -171,7 +173,7 @@
                        (let [events (retrieve-events watcher)]
                          (when-not (empty? events)
                            (process-events! watcher events)))
-                      (catch ClosedWatchServiceException e
+                      (catch ClosedWatchServiceException _e
                         (reset! stopped? true)
                         (log/info (trs "Closing watcher {0}" watcher)))))))))
 

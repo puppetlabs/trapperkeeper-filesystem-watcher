@@ -13,3 +13,6 @@ pom.xml.asc
 /resources/locales.clj
 /dev-resources/i18n/bin
 /resources/**/Messages*.class
+.idea
+.eastwood
+.clj-kondo/cache/

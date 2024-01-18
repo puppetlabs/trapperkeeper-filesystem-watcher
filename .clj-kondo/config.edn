@@ -1,0 +1,13 @@
+{:linters {:unresolved-symbol {:level :warning :exclude [(puppetlabs.trapperkeeper.services/service)
+                                                         (puppetlabs.trapperkeeper.core/defservice)
+                                                         (puppetlabs.trapperkeeper.core/service)
+                                                         (puppetlabs.trapperkeeper.services/defservice)
+                                                         (puppetlabs.trapperkeeper.testutils.bootstrap/with-app-with-config)
+                                                         (clojure.test/is [thrown+? thrown+-with-msg? logged?])]}
+           :invalid-arity {:skip-args [puppetlabs.trapperkeeper.services/service
+                                       puppetlabs.trapperkeeper.services/defservice
+                                       puppetlabs.trapperkeeper.core/defservice
+                                       puppetlabs.trapperkeeper.core/service]}}
+
+ :lint-as {puppetlabs.trapperkeeper.core/defservice clojure.core/def
+           puppetlabs.trapperkeeper.services/defservice clojure.core/def}}

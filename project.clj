@@ -6,7 +6,7 @@
 
   :min-lein-version "2.9.1"
 
-  :parent-project  {:coords [puppetlabs/clj-parent "4.0.2"]
+  :parent-project  {:coords [puppetlabs/clj-parent "7.3.1"]
                     :inherit [:managed-dependencies]}
 
   :pedantic? :abort
@@ -37,7 +37,8 @@
                                    :scope "test"]]}}
 
   :plugins  [[lein-parent "0.3.7"]
-             [puppetlabs/i18n "0.8.0"]]
+             [jonase/eastwood "1.4.2"]
+             [puppetlabs/i18n "0.9.2"]]
 
-  :main puppetlabs.trapperkeeper.main
-)
+  :main puppetlabs.trapperkeeper.main)
+
