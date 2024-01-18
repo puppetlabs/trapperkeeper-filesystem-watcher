@@ -12,8 +12,9 @@
             [puppetlabs.trapperkeeper.app :as tk-app]
             [puppetlabs.trapperkeeper.internal :as tk-internal])
   (:import (com.puppetlabs DirWatchUtils)
+           (java.io File)
            (java.net URI)
-           (java.nio.file FileSystems Paths)))
+           (java.nio.file FileSystems Paths StandardWatchEventKinds WatchEvent)))
 
 (use-fixtures :once schema-test/validate-schemas)
 
@@ -585,10 +586,10 @@
 ;; triggered in the normal integration tests above.
 (deftest clojurize-overflows
   (testing "clojurize"
-    (let [watch-path (.toPath (fs/temp-dir "clojurize-overflows"))
+    (let [watch-path (.toPath ^File (fs/temp-dir "clojurize-overflows"))
           overflow-event (reify
-                          java.nio.file.WatchEvent
-                          (kind [_this] java.nio.file.StandardWatchEventKinds/OVERFLOW)
+                          WatchEvent
+                          (kind [_this] StandardWatchEventKinds/OVERFLOW)
                           (count [_this] 1)
                           (context [_this] nil))
           expected {:type :unknown :count 1 :watched-path (.toFile watch-path)}]
