@@ -2,7 +2,7 @@
   (:require [clojure.tools.logging :as log]
             [puppetlabs.i18n.core :refer [trs]]
             [puppetlabs.trapperkeeper.services :as tk]
-            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer :all]
+            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service  :refer [FilesystemWatchService create-watcher]]
             [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-core :as watch-core])
   (:import (java.io IOException)))
 

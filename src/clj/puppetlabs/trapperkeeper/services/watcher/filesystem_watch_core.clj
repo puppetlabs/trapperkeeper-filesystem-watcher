@@ -5,7 +5,7 @@
             [puppetlabs.i18n.core :refer [trs]]
             [puppetlabs.kitchensink.core :as ks]
             [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [Event Watcher] :as watch-protocol])
-  (:import (clojure.lang Atom IFn)
+  (:import (clojure.lang IFn)
            (java.nio.file StandardWatchEventKinds Path WatchEvent WatchKey FileSystems ClosedWatchServiceException)
            (com.puppetlabs DirWatchUtils)))
 
@@ -64,7 +64,7 @@
   [watch-service callbacks recursive]
   Watcher
   (add-watch-dir!
-    [this dir]
+    [_this dir]
     (let [watched-path (.toPath (fs/file dir))]
       (if @recursive
         (DirWatchUtils/registerRecursive watch-service [watched-path])
@@ -85,7 +85,7 @@
     (watch-protocol/add-watch-dir! this dir))
 
   (add-callback!
-    [this callback]
+    [_this callback]
     (swap! callbacks conj callback)))
 
 (defn create-watcher
@@ -171,7 +171,7 @@
                        (let [events (retrieve-events watcher)]
                          (when-not (empty? events)
                            (process-events! watcher events)))
-                      (catch ClosedWatchServiceException e
+                      (catch ClosedWatchServiceException _e
                         (reset! stopped? true)
                         (log/info (trs "Closing watcher {0}" watcher)))))))))
 

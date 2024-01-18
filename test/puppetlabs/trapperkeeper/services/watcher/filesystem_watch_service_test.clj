@@ -3,7 +3,7 @@
             [clojure.set :as set]
             [schema.test :as schema-test]
             [me.raynes.fs :as fs]
-            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer :all]
+            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [add-callback! add-watch-dir! create-watcher]]
             [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service :refer [filesystem-watch-service]]
             [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-core :as watch-core]
             [puppetlabs.trapperkeeper.testutils.bootstrap :refer [with-app-with-config]]
@@ -13,7 +13,7 @@
             [puppetlabs.trapperkeeper.internal :as tk-internal])
   (:import (com.puppetlabs DirWatchUtils)
            (java.net URI)
-           (java.nio.file FileSystems FileSystem Paths)))
+           (java.nio.file FileSystems Paths)))
 
 (use-fixtures :once schema-test/validate-schemas)
 
@@ -496,18 +496,18 @@
 (deftest ^:integration callback-exception-shutdown-test
   (let [root-dir (fs/temp-dir "root-dir")
         error (Exception. "boom")
-        callback (fn [& _] (throw error))]
-    (let [app (tk/boot-services-with-config [filesystem-watch-service] {})
-          service (tk-app/get-service app :FilesystemWatchService)]
-      (watch! service root-dir callback)
-      (with-test-logging
-       (spit (fs/file root-dir "test-file") "foo")
-       (let [reason (tk-internal/wait-for-app-shutdown app)]
-         (is (= (:cause reason) :service-error))
-         (is (= (:error reason) error)))
-       (is (logged?
-            #"shutdown-on-error triggered because of exception"
-            :error))))))
+        callback (fn [& _] (throw error))
+        app (tk/boot-services-with-config [filesystem-watch-service] {})
+        service (tk-app/get-service app :FilesystemWatchService)]
+    (watch! service root-dir callback)
+    (with-test-logging
+     (spit (fs/file root-dir "test-file") "foo")
+     (let [reason (tk-internal/wait-for-app-shutdown app)]
+       (is (= (:cause reason) :service-error))
+       (is (= (:error reason) error)))
+     (is (logged?
+          #"shutdown-on-error triggered because of exception"
+          :error)))))
 
 (deftest ^:integration debouncing-test
   (testing "debouncing"
@@ -567,7 +567,7 @@
      (let [service (tk-app/get-service app :FilesystemWatchService)
            watcher (create-watcher service {:recursive false})
            results (atom [])
-           callback (make-callback results)
+           _callback (make-callback results)
            first-dir (fs/temp-dir "first")
            second-dir (fs/temp-dir "second")]
       ;; adding another directory with the same recursive value is OK
@@ -588,9 +588,9 @@
     (let [watch-path (.toPath (fs/temp-dir "clojurize-overflows"))
           overflow-event (reify
                           java.nio.file.WatchEvent
-                          (kind [this] java.nio.file.StandardWatchEventKinds/OVERFLOW)
-                          (count [this] 1)
-                          (context [this] nil))
+                          (kind [_this] java.nio.file.StandardWatchEventKinds/OVERFLOW)
+                          (count [_this] 1)
+                          (context [_this] nil))
           expected {:type :unknown :count 1 :watched-path (.toFile watch-path)}]
       (testing "overflow events are handled normally"
         (is (= expected (watch-core/clojurize overflow-event watch-path)))))))
