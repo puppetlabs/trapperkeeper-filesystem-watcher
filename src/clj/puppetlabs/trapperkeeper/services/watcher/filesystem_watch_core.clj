@@ -62,6 +62,8 @@
       (IllegalArgumentException.
         (trs "Must pass a boolean value for :recursive (directory watching) option")))))
 
+(def all-types #{:create :modify :delete :unknown})
+
 (defrecord WatcherImpl
   [watch-service callbacks recursive]
   Watcher
@@ -86,9 +88,21 @@
                @recursive (:recursive options)))))
     (watch-protocol/add-watch-dir! this dir))
 
+  (add-file-callback!
+    [this path-to-file callback]
+    (watch-protocol/add-file-callback! this path-to-file callback all-types))
+
+  (add-file-callback!
+    [_this path-to-file callback types]
+    (swap! callbacks conj {:callback callback :file path-to-file :types (set types)}))
+
   (add-callback!
-    [_this callback]
-    (swap! callbacks conj callback)))
+    [this callback]
+    (watch-protocol/add-callback! this callback all-types))
+
+  (add-callback!
+    [_this callback types]
+    (swap! callbacks conj {:callback callback :types (set types)})))
 
 (defn create-watcher
   ([]
@@ -120,7 +134,7 @@
     (map #(clojurize % (.watchable watch-key)) events)))
 
 (schema/defn retrieve-events :- [Event]
-  "Blocks until an event the watcher is concerned with has occured. Will then
+  "Blocks until an event the watcher is concerned with has occurred. Will then
   poll for a new event, waiting at least `window-min` for a new event to
   occur. Will continue polling for as long as there are new events that occur
   within `window-min`, or the `window-max` time limit has been exceeded."
@@ -146,6 +160,19 @@
           events))
       initial-events)))
 
+(defn filter-events
+  [callback-entry events]
+  (let [allowed-types (:types callback-entry)
+        event-filter (fn [event] (contains? allowed-types (:type event)))
+        ;; construct an optimal filter function based on the type of filtering needed
+        filter-fn (if (nil? (:file callback-entry))
+                    ;; check the type match only
+                    event-filter
+                    ;; check the file as well as the type match
+                    (fn [event] (and (event-filter event)
+                                     (= (.toPath ^File (:changed-path event)) (:file callback-entry)))))]
+    (filter filter-fn events)))
+
 (schema/defn process-events!
   "Process for side effects any events that occurred for watcher's watch-key"
   [watcher :- (schema/protocol Watcher)
@@ -164,8 +191,8 @@
                   (trs "Events:")
                   (ks/pprint-to-string events)))
 
-    (doseq [callback callbacks]
-      (callback events))))
+    (doseq [callback-entry callbacks]
+      ((:callback callback-entry) (filter-events callback-entry events)))))
 
 (schema/defn watch! :- Future
   "Creates and returns a future. Processes events for the passed in watcher within the context of that future.
