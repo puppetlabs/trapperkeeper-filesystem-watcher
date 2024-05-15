@@ -145,23 +145,24 @@
           events))
       initial-events)))
 
-
 (schema/defn process-events!
-  "Process for side-effects any events that occured for watcher's watch-key"
+  "Process for side effects any events that occurred for watcher's watch-key"
   [watcher :- (schema/protocol Watcher)
    events :- [Event]]
-  (let [callbacks @(:callbacks watcher)
-        events-by-dir (group-by :watched-path events)]
+  (let [callbacks @(:callbacks watcher)]
     ;; avoid doing a potentially expensive walk when we aren't logging at :debug
     (when (log/enabled? :debug)
-      (doseq [[dir events'] events-by-dir]
-        (log/debug (trs "Got {0} event(s) in directory {1}"
-                     (count events') dir))))
+      (let [events-by-dir (group-by :watched-path events)]
+        (doseq [[dir events'] events-by-dir]
+          (log/debug (trs "Got {0} event(s) in directory {1}"
+                       (count events') dir)))))
+
     ;; avoid doing a potentially expensive print-to-string when we aren't logging at :trace
     (when (log/enabled? :trace)
       (log/tracef "%s\n%s"
                   (trs "Events:")
                   (ks/pprint-to-string events)))
+
     (doseq [callback callbacks]
       (callback events))))
 
