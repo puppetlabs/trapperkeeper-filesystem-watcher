@@ -6,12 +6,10 @@
 
   :min-lein-version "2.9.1"
 
-  :parent-project  {:coords [puppetlabs/clj-parent "7.3.1"]
+  :parent-project  {:coords [puppetlabs/clj-parent "7.3.20"]
                     :inherit [:managed-dependencies]}
 
   :pedantic? :abort
-
-  :exclusions [org.clojure/clojure]
 
   :dependencies [[org.clojure/clojure]
                  [org.clojure/tools.logging]
