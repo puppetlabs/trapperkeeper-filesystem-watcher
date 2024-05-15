@@ -8,7 +8,8 @@
   (:import (clojure.lang IFn)
            (java.io File)
            (java.nio.file StandardWatchEventKinds Path WatchEvent WatchKey FileSystems ClosedWatchServiceException WatchService)
-           (com.puppetlabs DirWatchUtils)))
+           (com.puppetlabs DirWatchUtils)
+           (java.util.concurrent Future)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Constants
@@ -166,19 +167,26 @@
     (doseq [callback callbacks]
       (callback events))))
 
-(schema/defn watch!
-  "Creates a future and processes events for the passed in watcher.
-  The future will continue until the underlying WatchService is closed."
+(schema/defn watch! :- Future
+  "Creates and returns a future. Processes events for the passed in watcher within the context of that future.
+  The future will continue until the underlying WatchService is closed, or the future is interrupted."
   [watcher :- (schema/protocol Watcher)
-   shutdown-fn :- IFn]
+   shutdown-fn :- IFn
+   stopped? :- (schema/atom schema/Bool)]
   (future
-    (let [stopped? (atom false)]
-      (shutdown-fn #(while (not @stopped?)
-                     (try
-                       (let [events (retrieve-events watcher)]
-                         (when-not (empty? events)
-                           (process-events! watcher events)))
-                      (catch ClosedWatchServiceException _e
-                        (reset! stopped? true)
-                        (log/info (trs "Closing watcher {0}" watcher)))))))))
+    (shutdown-fn
+      #(while (not @stopped?)
+         (try
+           (let [events (retrieve-events watcher)]
+             (when-not (empty? events)
+               (process-events! watcher events)))
+          (catch ClosedWatchServiceException _e
+            (log/info (trs "Closing watcher {0}" watcher)))
+          ;; it is possible for `retrieve-events` to generate an InterruptedException if the `.take` occurs when an
+          ;; interrupt is requested. This is explicitly handled to prevent shutting down the whole application.
+          (catch InterruptedException _e
+            (log/info (trs "Watching for events interrupted by thread shutdown")))
+          (catch Throwable e
+            (log/error e (trs "Fatal error while watching for events"))
+            (throw e)))))))
 
