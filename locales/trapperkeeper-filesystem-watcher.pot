@@ -1,13 +1,13 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR Puppet <docs@puppet.com>
-# This file is distributed under the same license as the PACKAGE package.
+# This file is distributed under the same license as the puppetlabs.trapperkeeper_filesystem_watcher package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
 #, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: puppetlabs.trapperkeeper_filesystem_watcher \n"
-"X-Git-Ref: da5a414afc1fd6844576fb2841150435d1ab0f8c\n"
+"X-Git-Ref: c24619fb294be374d60997899536b52dfcd79ab4\n"
 "Report-Msgid-Bugs-To: docs@puppet.com\n"
 "POT-Creation-Date: \n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
@@ -44,6 +44,26 @@ msgstr ""
 msgid "Closing watcher {0}"
 msgstr ""
 
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
+msgid "Watching for events interrupted by thread shutdown"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_core.clj
+msgid "Fatal error while watching for events"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_service.clj
+msgid "Shutting down watcher service"
+msgstr ""
+
 #: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_service.clj
 msgid "Exception while closing watch service"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_service.clj
+msgid "Future completed after {0} tries"
+msgstr ""
+
+#: src/clj/puppetlabs/trapperkeeper/services/watcher/filesystem_watch_service.clj
+msgid "Done shutting down watcher service"
 msgstr ""
