@@ -1,16 +1,16 @@
 (ns puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service-test
-  (:require [clojure.test :refer [deftest testing is use-fixtures]]
-            [clojure.set :as set]
-            [schema.test :as schema-test]
+  (:require [clojure.set :as set]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [me.raynes.fs :as fs]
-            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [add-callback! add-watch-dir! create-watcher]]
-            [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service :refer [filesystem-watch-service]]
+            [puppetlabs.trapperkeeper.app :as tk-app]
+            [puppetlabs.trapperkeeper.core :as tk]
+            [puppetlabs.trapperkeeper.internal :as tk-internal]
+            [puppetlabs.trapperkeeper.services.protocols.filesystem-watch-service :refer [add-callback! add-file-callback! add-watch-dir! create-watcher]]
             [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-core :as watch-core]
+            [puppetlabs.trapperkeeper.services.watcher.filesystem-watch-service :refer [filesystem-watch-service]]
             [puppetlabs.trapperkeeper.testutils.bootstrap :refer [with-app-with-config]]
             [puppetlabs.trapperkeeper.testutils.logging :refer [with-test-logging]]
-            [puppetlabs.trapperkeeper.core :as tk]
-            [puppetlabs.trapperkeeper.app :as tk-app]
-            [puppetlabs.trapperkeeper.internal :as tk-internal])
+            [schema.test :as schema-test])
   (:import (com.puppetlabs DirWatchUtils)
            (java.io File)
            (java.net URI)
@@ -26,13 +26,12 @@
 (defn contains-events?
   [dest events]
   (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
-     (set/subset? events select-keys-set)))
+    (set/subset? events select-keys-set)))
 
 (defn exactly-matches-event?
   [dest expected-event]
   (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
     (= expected-event select-keys-set)))
-
 
 (def wait-time
   "Number of milliseconds wait-for-events! should wait."
@@ -41,17 +40,20 @@
 (defn wait-for-events
   "Waits for events to land in dest.  If they do, events is returned.  Gives up
   and returns the contents of dest after wait-time."
-  [dest events]
-  (let [start-time (System/currentTimeMillis)]
-    (loop []
-      (let [elapsed-time (- (System/currentTimeMillis) start-time)]
-        (if (contains-events? dest events)
-          events
-          (if (< elapsed-time wait-time)
-            (recur)
-            (do
-              (println "timed-out waiting for events")
-              @dest)))))))
+  ([dest events]
+   (wait-for-events dest events wait-time))
+  ([dest events timeout-ms]
+   (let [start-time (System/currentTimeMillis)]
+     (loop []
+       (let [elapsed-time (- (System/currentTimeMillis) start-time)]
+         (if (contains-events? dest events)
+           events
+           (if (< elapsed-time timeout-ms)
+             (do (Thread/sleep 100)
+               (recur))
+             (do
+               (println "timed-out waiting for events")
+               @dest))))))))
 
 (defn wait-for-exactly-event
   "Waits for event to land in dest. On first registered event or events in dest,
@@ -71,14 +73,16 @@
             @dest))))))
 
 (defn watch!*
-  [watcher root callback]
+  [watcher root callback types]
   (add-watch-dir! watcher root {:recursive true})
-  (add-callback! watcher callback))
+  (add-callback! watcher callback types))
 
 ;; TODO perhaps move this (or something similar) up to the TK protocol
 (defn watch!
-  [service root callback]
-  (watch!* (create-watcher service) root callback))
+  ([service root callback]
+   (watch! service root callback [:create :modify :delete :unknown]))
+  ([service root callback types]
+   (watch!* (create-watcher service) root callback types)))
 
 (deftest ^:integration single-path-test
   (let [root (fs/temp-dir "single-path-test")
@@ -150,6 +154,191 @@
            (let [events #{{:changed-path sub-dir
                            :type :create}}]
              (is (= events (wait-for-events results events))))))))))
+
+(deftest ^:integration one-event-type
+  (let [root (fs/temp-dir "single-path-test")
+        first-file (fs/file root "first-file")
+        second-file (fs/file root "second-file")
+        results (atom [])
+        callback (make-callback results)]
+    (with-app-with-config
+      app [filesystem-watch-service] {}
+      (let [service (tk-app/get-service app :FilesystemWatchService)]
+        (watch! service root callback [:create]))
+      (testing "callback not invoked until directory changes"
+        (is (= @results [])))
+      (testing "callback invoked when a new file is created"
+        (spit first-file "foo")
+        (let [events #{{:changed-path first-file
+                        :type :create}}]
+          (is (= events (wait-for-events results events)))))
+      (testing "callback invoked when another new file is created"
+        (reset! results [])
+        (spit second-file "bar")
+        (let [events #{{:changed-path second-file
+                        :type :create}}]
+          (is (= events (wait-for-events results events)))))
+      (testing "does not reports file modifications"
+        (testing "of a single file"
+          (reset! results [])
+          (spit first-file "something different")
+          (Thread/sleep 1500)
+          (is (empty? @results)))
+        (testing "of multiple files"
+          (reset! results [])
+          (spit first-file "still not the same as before")
+          (spit second-file "still not the same as before")
+          (Thread/sleep 1500)
+          (is (empty? @results)))
+      (testing "watch-dir! does not report file deletions"
+        (testing "of multiple files"
+          (reset! results [])
+          (is (fs/delete first-file))
+          (is (fs/delete second-file))
+          (Thread/sleep 1500)
+           (is (empty? @results)))
+      (testing "re-creation of a deleted directory"
+        (reset! results [])
+        (let [sub-dir (fs/file root "sub-dir")]
+          (testing "Initial directory creation and deletion"
+            (is (fs/mkdir sub-dir))
+            (let [events #{{:changed-path sub-dir
+                            :type :create}}]
+              (is (= events (wait-for-events results events))))
+            (reset! results [])
+            (is (fs/delete sub-dir))
+            (Thread/sleep 1500)
+            (is (empty? @results)))
+          (testing "Re-creating the directory fires an event as expected"
+            (reset! results [])
+            (is (fs/mkdir sub-dir))
+            (let [events #{{:changed-path sub-dir
+                            :type :create}}]
+              (is (= events (wait-for-events results events))))))))))))
+
+(deftest ^:integration one-file-watch
+  (let [root (fs/temp-dir "single-path-test")
+        first-file (fs/file root "first-file")
+        second-file (fs/file root "second-file")
+        results (atom [])
+        callback (make-callback results)]
+    (with-app-with-config
+      app [filesystem-watch-service] {}
+      (let [service (tk-app/get-service app :FilesystemWatchService)
+            watcher (create-watcher service)]
+        (add-watch-dir! watcher root)
+        ;; watch only the first path
+        (add-file-callback! watcher (.toPath first-file) callback))
+      (testing "callback not invoked until directory changes"
+        (is (= @results [])))
+      (testing "callback invoked when a new file is created"
+        (spit first-file "foo")
+        (let [events #{{:changed-path first-file
+                        :type :create}}]
+          (is (= events (wait-for-events results events)))))
+      (testing "callback not invoked when another new file is created"
+        (reset! results [])
+        (spit second-file "bar")
+        (Thread/sleep 1500)
+        (is (empty? @results)))
+      (testing "reports file modifications"
+        (testing "of a single file"
+          (reset! results [])
+          (spit first-file "something different")
+          (let [events #{{:changed-path first-file
+                          :type :modify}}]
+            (is (= events (wait-for-events results events)))))
+        (testing "of single file when multiple files are changed"
+          (reset! results [])
+          (spit first-file "still not the same as before")
+          (spit second-file "still not the same as before")
+          (let [events #{{:changed-path first-file
+                          :type :modify}}]
+            (is (= events (wait-for-events results events))))))
+      (testing "watch-dir! reports file deletion"
+        (testing "of single file when multiples are deleted"
+          (reset! results [])
+          (is (fs/delete first-file))
+          (is (fs/delete second-file))
+          (let [events [{:changed-path first-file
+                         :type :delete}]]
+            (is (= events (wait-for-events results events))))))
+      (testing "re-creation of a deleted directory"
+        (reset! results [])
+        (let [sub-dir (fs/file root "sub-dir")]
+          (testing "Initial directory creation and deletion"
+            (is (fs/mkdir sub-dir))
+            (Thread/sleep 1500)
+            (is (empty? @results))
+            (is (fs/delete sub-dir))
+            (Thread/sleep 1500)
+            (is (empty? @results)))
+          (testing "Re-creating the directory does not create an event as expected"
+            (reset! results [])
+            (is (fs/mkdir sub-dir))
+            (Thread/sleep 1500)
+            (is (empty? @results))))))))
+
+(deftest ^:integration one-file-watch-single-event
+  (let [root (fs/temp-dir "single-path-test")
+        first-file (fs/file root "first-file")
+        second-file (fs/file root "second-file")
+        results (atom [])
+        callback (make-callback results)]
+    (with-app-with-config
+      app [filesystem-watch-service] {}
+      (let [service (tk-app/get-service app :FilesystemWatchService)
+            watcher (create-watcher service)]
+        (add-watch-dir! watcher root)
+        ;; watch only the first path
+        (add-file-callback! watcher (.toPath first-file) callback #{:create}))
+      (testing "callback not invoked until directory changes"
+        (is (= @results [])))
+      (testing "callback invoked when a new file is created"
+        (spit first-file "foo")
+        (Thread/sleep 1500)
+        (let [events #{{:changed-path first-file
+                        :type :create}}]
+          (is (= events (wait-for-events results events)))))
+      (testing "callback not invoked when another new file is created"
+        (reset! results [])
+        (spit second-file "bar")
+        (Thread/sleep 1500)
+        (is (empty? @results)))
+      (testing "does not report file modifications"
+        (testing "of a single file"
+          (reset! results [])
+          (spit first-file "something different")
+          (Thread/sleep 1500)
+          (is (empty? @results)))
+        (testing "of single file when multiple files are changed"
+          (reset! results [])
+          (spit first-file "still not the same as before")
+          (spit second-file "still not the same as before")
+          (Thread/sleep 1500)
+          (is (empty? @results)))
+      (testing "watch-dir! does not report file deletion"
+        (testing "of single file when multiples are deleted"
+          (reset! results [])
+          (is (fs/delete first-file))
+          (is (fs/delete second-file))
+          (Thread/sleep 1500)
+          (is (empty? @results))))
+      (testing "re-creation of a deleted directory"
+        (reset! results [])
+        (let [sub-dir (fs/file root "sub-dir")]
+          (testing "Initial directory creation and deletion"
+            (is (fs/mkdir sub-dir))
+            (Thread/sleep 1500)
+            (is (empty? @results))
+            (is (fs/delete sub-dir))
+            (Thread/sleep 1500)
+            (is (empty? @results)))
+          (testing "Re-creating the directory does not create an event as expected"
+            (reset! results [])
+            (is (fs/mkdir sub-dir))
+            (Thread/sleep 1500)
+            (is (empty? @results)))))))))
 
 (deftest ^:integration multi-callbacks-test
   (let [root-1 (fs/temp-dir "multi-root-test-1")
@@ -464,8 +653,8 @@
            test-file-1 (fs/file dir-1 "test-file")
            test-file-2 (fs/file dir-2 "test-file")]
        (testing "Watching separate directories"
-         (watch!* watcher-1 dir-1 callback-1)
-         (watch!* watcher-2 dir-2 callback-2)
+         (watch!* watcher-1 dir-1 callback-1 [:create :modify :delete :unknown])
+         (watch!* watcher-2 dir-2 callback-2 [:create :modify :delete :unknown])
          (testing "Events do not bleed over between watchers"
            (spit test-file-1 "foo")
            (spit test-file-2 "foo")
@@ -483,7 +672,7 @@
                results-3 (atom [])
                callback-3 (make-callback results-3)]
            ;; ... and tell it to watch the same directory as the first one.
-           (watch!* watcher-3 dir-1 callback-3)
+           (watch!* watcher-3 dir-1 callback-3 [:create :modify :delete :unknown])
            (spit test-file-1 "bar")
            (spit test-file-2 "bar")
            (let [events-1 #{{:changed-path test-file-1
