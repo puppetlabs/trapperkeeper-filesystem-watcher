@@ -119,14 +119,16 @@
     (map #(clojurize % (.watchable watch-key)) events)))
 
 (schema/defn retrieve-events :- [Event]
-  "Blocks until an event the watcher is concerned with has occured. Will then
+  "Blocks until an event the watcher is concerned with has occurred. Will then
   poll for a new event, waiting at least `window-min` for a new event to
   occur. Will continue polling for as long as there are new events that occur
   within `window-min`, or the `window-max` time limit has been exceeded."
   [watcher :- (schema/protocol Watcher)]
   (let [^WatchService watch-service (:watch-service watcher)
         watch-key (.take watch-service)
-        initial-events (watch-key->events watch-key)
+        ;; use `vec` to ensure the events sequence is correctly concatenated below.
+        ;; Without it, the events will be out of order.
+        initial-events  (vec (watch-key->events watch-key))
         time-limit (+ (System/currentTimeMillis) window-max)
         recursive @(:recursive watcher)]
     (when recursive
@@ -140,14 +142,14 @@
               (watch-new-directories! waiting-events watcher))
             (.reset waiting-key)
             (if (< (System/currentTimeMillis) time-limit)
-              (recur (concat events waiting-events))
-              (concat events waiting-events)))
+              (recur (into events waiting-events))
+              (into events waiting-events)))
           events))
       initial-events)))
 
 
 (schema/defn process-events!
-  "Process for side-effects any events that occured for watcher's watch-key"
+  "Process for side effects any events that occurred for watcher's watch-key"
   [watcher :- (schema/protocol Watcher)
    events :- [Event]]
   (let [callbacks @(:callbacks watcher)
