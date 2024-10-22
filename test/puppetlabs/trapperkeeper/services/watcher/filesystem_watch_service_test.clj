@@ -23,9 +23,13 @@
   (fn [events]
     (swap! dest concat events)))
 
+(defn format-events
+  [dest]
+  (set (map #(select-keys % [:changed-path :type]) @dest)))
+
 (defn contains-events?
   [dest events]
-  (let [select-keys-set (set (map #(select-keys % [:changed-path :type]) @dest))]
+  (let [select-keys-set (format-events dest)]
     (set/subset? events select-keys-set)))
 
 (defn exactly-matches-event?
@@ -47,7 +51,7 @@
      (loop []
        (let [elapsed-time (- (System/currentTimeMillis) start-time)]
          (if (contains-events? dest events)
-           events
+           (format-events dest)
            (if (< elapsed-time timeout-ms)
              (do (Thread/sleep 100)
                (recur))
@@ -100,9 +104,6 @@
        (spit first-file "foo")
        (let [events #{{:changed-path first-file
                        :type :create}}]
-         ;; This is the first of many weird assertions like this, but it's done
-         ;; this way on purpose to get decent reporting from failed assertions.
-         ;; See above the docstring on wait-for-events.
          (is (= events (wait-for-events results events)))))
      (testing "callback invoked again when another new file is created"
        (reset! results [])
@@ -144,6 +145,7 @@
            (let [events #{{:changed-path sub-dir
                            :type :create}}]
              (is (= events (wait-for-events results events))))
+           (reset! results [])
            (is (fs/delete sub-dir))
            (let [events #{{:changed-path sub-dir
                            :type :delete}}]
@@ -260,8 +262,8 @@
           (reset! results [])
           (is (fs/delete first-file))
           (is (fs/delete second-file))
-          (let [events [{:changed-path first-file
-                         :type :delete}]]
+          (let [events #{{:changed-path first-file
+                         :type :delete}}]
             (is (= events (wait-for-events results events))))))
       (testing "re-creation of a deleted directory"
         (reset! results [])
@@ -444,7 +446,7 @@
          (is (fs/delete-dir intermediate-dir))
          (let [events #{{:changed-path intermediate-dir
                          :type :delete}}]
-           (is (= events (wait-for-events results events)))))
+           (is (every? #(= :delete (:type %)) (wait-for-events results events)))))
        (let [another-nested-dir (fs/file root-dir "another-nested-dir")
              new-nested-file (fs/file another-nested-dir "new-nested-file")]
          (testing "new nested directory"
@@ -464,6 +466,8 @@
              (reset! results [])
              (is (fs/delete-dir another-nested-dir))
              (let [events #{{:changed-path another-nested-dir
+                             :type :delete}
+                            {:changed-path new-nested-file
                              :type :delete}}]
                (is (= events (wait-for-events results events)))))))))))
 
@@ -628,6 +632,8 @@
            (testing "Deletion thereof"
              (is (fs/delete-dir nested-dir))
              (let [events #{{:changed-path nested-dir
+                             :type :delete}
+                            {:changed-path test-file-nested
                              :type :delete}}]
                (is (= events (wait-for-events results events))))
              (reset! results [])

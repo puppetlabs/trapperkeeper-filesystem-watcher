@@ -1,5 +1,6 @@
 (ns puppetlabs.trapperkeeper.services.watcher.filesystem-watch-core
-  (:require [clojure.tools.logging :as log]
+  (:require [clojure.set :as set]
+            [clojure.tools.logging :as log]
             [me.raynes.fs :as fs]
             [schema.core :as schema]
             [puppetlabs.i18n.core :refer [trs]]
@@ -175,14 +176,60 @@
                                      (= (.toPath ^File (:changed-path event)) (:file callback-entry)))))]
     (filter filter-fn events)))
 
+(defn ->tuple
+  "Create a tuple of the two fields we care about in an Event.
+  This simple element querying our sets simple."
+  [event]
+  [(:changed-path event) (:type event)])
+
+(defn already-seen?
+  "Expects a set of event tuples (see ->tuple) and a full Event.
+  Is this a modify event for a changed-path where we've already seen a create or modify event?"
+  [events {:keys [changed-path type] :as _event}]
+  (when (= :modify type)
+     (or (set/subset? #{[changed-path :create]} events)
+         (set/subset? #{[changed-path :modify]} events))))
+
+(defn should-overwrite?
+  "Expects a set of event tuples (see ->tuple) and a full Event.
+  Is this a create event that should supersede a previously found modify or create event?"
+  [events {:keys [changed-path type] :as _event}]
+  (when (= :create type)
+     (or (set/subset? #{[changed-path :modify]} events)
+         (set/subset? #{[changed-path :create]} events))))
+
+(defn reducible-remove
+  [{:keys [tuples] :as memo} item]
+  (cond
+    ;; Ignore the new item if we've already seen a value representing it
+    (already-seen? tuples item)
+      memo
+    ;; Remove old value and replace it with the new value
+    (should-overwrite? tuples item)
+      (-> memo
+          (update :tuples set/difference #{[(:changed-path item) :modify]})
+          (update :tuples set/union #{(->tuple item)})
+          (update :events (fn [es] (filter #(and (= (:changed-path item) (:changed-path %))
+                                                (or
+                                                  (= :modify (:type %))
+                                                  (= :create (:type %))))
+                                           es)))
+          (update :events conj item))
+    ;; default add the event to our tracker
+    :else
+      (-> memo
+          (update :tuples set/union #{(->tuple item)})
+          (update :events conj item))))
+
 (schema/defn process-events!
   "Process for side effects any events that occurred for watcher's watch-key"
   [watcher :- (schema/protocol Watcher)
    events :- [Event]]
-  (let [callbacks @(:callbacks watcher)]
+  (let [callbacks @(:callbacks watcher)
+        compressed-events (->> events (reduce reducible-remove {:tuples #{} :events []}) :events)]
     ;; avoid doing a potentially expensive walk when we aren't logging at :debug
     (when (log/enabled? :debug)
-      (let [events-by-dir (group-by :watched-path events)]
+      (let [events-by-dir (group-by :watched-path compressed-events)]
         (doseq [[dir events'] events-by-dir]
           (log/debug (trs "Got {0} event(s) in directory {1}"
                        (count events') dir)))))
@@ -191,10 +238,10 @@
     (when (log/enabled? :trace)
       (log/tracef "%s\n%s"
                   (trs "Events:")
-                  (ks/pprint-to-string events)))
+                  (ks/pprint-to-string compressed-events)))
 
     (doseq [callback-entry callbacks]
-      ((:callback callback-entry) (filter-events callback-entry events)))))
+      ((:callback callback-entry) (filter-events callback-entry compressed-events)))))
 
 (schema/defn watch! :- Future
   "Creates and returns a future. Processes events for the passed in watcher within the context of that future.
