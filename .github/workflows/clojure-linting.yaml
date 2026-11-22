@@ -5,6 +5,9 @@ on:
     types: [opened, reopened, edited, synchronize]
     paths: ['src/**','test/**','.clj-kondo/config.edn','project.clj','.github/**']
 
+permissions:
+  contents: read
+
 jobs:
   clojure-linting:
     name: Clojure Linting
@@ -17,6 +20,10 @@ jobs:
           java-version: 17
       - name: checkout repo
         uses: actions/checkout@v2
+      - name: Install Clojure tools
+        uses: DeLaGuardo/setup-clojure@bc7570e912b028bbcc22f457adec7fdf98e2f4ed # 12.5
+        with:
+          lein: 2.11.2
       - name: install clj-kondo (this is quite fast)
         run: |
           curl -sLO https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo

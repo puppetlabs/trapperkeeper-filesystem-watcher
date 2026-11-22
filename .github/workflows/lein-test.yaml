@@ -5,7 +5,10 @@ on:
   workflow_dispatch:
   pull_request:
     types: [opened, reopened, edited, synchronize]
-    paths: ['src/**','test/**','project.clj']
+    paths: ['src/**','test/**','project.clj','.github/workflows/lein-test.yaml']
+
+permissions:
+  contents: read
 
 jobs:
   pr-testing:
@@ -13,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['11', '17']
+        version: ['17', '21']
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
@@ -25,6 +28,10 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: ${{ matrix.version }}
+      - name: Install Clojure tools
+        uses: DeLaGuardo/setup-clojure@bc7570e912b028bbcc22f457adec7fdf98e2f4ed # 12.5
+        with:
+          lein: 2.11.2
       - name: clojure tests
         run: lein test
         timeout-minutes: 30
