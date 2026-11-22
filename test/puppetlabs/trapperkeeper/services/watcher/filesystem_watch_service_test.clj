@@ -798,3 +798,84 @@
                  (.newWatchService (FileSystems/getDefault))
                  (Paths/get (URI. "file:///etc/foobar/baznoid")))
       (is (logged? #"Failed to register.*/etc/foobar/baznoid")))))
+
+(defn- event
+  [path type]
+  {:changed-path (File. ^String path)
+   :type type
+   :count 1
+   :watched-path (.getParentFile (File. ^String path))})
+
+(defn- compress
+  "Run a batch of events through the reduction that process-events! applies
+  (keep the seed in sync with it) and return [path type] pairs."
+  [events]
+  (->> events
+       (reduce watch-core/reducible-remove {:tuples #{} :events []})
+       :events
+       (mapv (juxt (comp str :changed-path) :type))))
+
+(deftest event-compression-keeps-events-for-other-paths
+  (testing "a repeated create of one path does not drop events for other paths"
+    (is (= [["/dir-a/file-a" :create]
+            ["/dir-b/file-b" :create]]
+           (compress [(event "/dir-a/file-a" :create)
+                      (event "/dir-b/file-b" :create)
+                      (event "/dir-b/file-b" :create)])))
+    (is (= [["/dir-a/file-a" :create]
+            ["/dir-b/file-b" :create]]
+           (compress [(event "/dir-b/file-b" :create)
+                      (event "/dir-a/file-a" :create)
+                      (event "/dir-b/file-b" :create)]))
+        "the repeated path's create moves to the position of its latest occurrence")
+    (is (= [["/dir-a/file-a" :delete]
+            ["/dir-b/file-b" :create]]
+           (compress [(event "/dir-a/file-a" :delete)
+                      (event "/dir-b/file-b" :modify)
+                      (event "/dir-b/file-b" :create)]))
+        "a create superseding a modify does not drop other paths' events")
+    (is (= [["/dir-b/file-b" :create]
+            ["/dir-a/file-a" :create]]
+           (compress [(event "/dir-a/file-a" :modify)
+                      (event "/dir-b/file-b" :create)
+                      (event "/dir-a/file-a" :create)]))
+        "a create superseding a modify on one path keeps an intervening create on another path, and the superseding create moves to the end")
+    (is (= [["/dir-a/file-a" :delete]
+            ["/dir-a/file-a" :create]]
+           (compress [(event "/dir-a/file-a" :create)
+                      (event "/dir-a/file-a" :delete)
+                      (event "/dir-a/file-a" :create)]))
+        "deletes for the repeated path are kept")))
+
+(deftest event-compression-collapses-events-for-one-path
+  (testing "duplicate events for a single path are still collapsed"
+    (is (= [["/dir-a/file-a" :create]]
+           (compress [(event "/dir-a/file-a" :create)
+                      (event "/dir-a/file-a" :modify)
+                      (event "/dir-a/file-a" :modify)])))
+    (is (= [["/dir-a/file-a" :create]]
+           (compress [(event "/dir-a/file-a" :create)
+                      (event "/dir-a/file-a" :create)])))
+    (is (= [["/dir-a/file-a" :create]]
+           (compress [(event "/dir-a/file-a" :modify)
+                      (event "/dir-a/file-a" :create)])))
+    (is (= [["/dir-a/file-a" :modify]]
+           (compress [(event "/dir-a/file-a" :modify)
+                      (event "/dir-a/file-a" :modify)])))))
+
+(deftest event-compression-preserves-event-order
+  (testing "events for distinct paths keep arrival order"
+    (is (= [["/dir-a/file-a" :create]
+            ["/dir-b/file-b" :delete]
+            ["/dir-c/file-c" :modify]]
+           (compress [(event "/dir-a/file-a" :create)
+                      (event "/dir-b/file-b" :delete)
+                      (event "/dir-c/file-c" :modify)]))))
+  (testing "a superseding create is appended after the events that preceded it"
+    (is (= [["/dir-b/file-b" :delete]
+            ["/dir-c/file-c" :modify]
+            ["/dir-a/file-a" :create]]
+           (compress [(event "/dir-a/file-a" :create)
+                      (event "/dir-b/file-b" :delete)
+                      (event "/dir-c/file-c" :modify)
+                      (event "/dir-a/file-a" :create)])))))

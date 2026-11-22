@@ -199,6 +199,13 @@
          (set/subset? #{[changed-path :create]} events))))
 
 (defn reducible-remove
+  "Reducing function that compresses a batch of events. The accumulator is
+  `{:tuples #{[changed-path type] ...} :events [Event ...]}`, seeded with
+  `{:tuples #{} :events []}`. A modify for a path already seen as a create or
+  modify is dropped. A create for a path already seen as a create or modify
+  replaces that path's earlier create/modify events and is appended at the
+  end. Every other event, including all deletes and all events for other
+  paths, is kept in arrival order."
   [{:keys [tuples] :as memo} item]
   (cond
     ;; Ignore the new item if we've already seen a value representing it
@@ -209,11 +216,15 @@
       (-> memo
           (update :tuples set/difference #{[(:changed-path item) :modify]})
           (update :tuples set/union #{(->tuple item)})
-          (update :events (fn [es] (filter #(and (= (:changed-path item) (:changed-path %))
-                                                (or
-                                                  (= :modify (:type %))
-                                                  (= :create (:type %))))
-                                           es)))
+          ;; Drop only this path's superseded create/modify events; everything
+          ;; else (other paths, and this path's deletes) must survive.
+          ;; Must stay a vector: conj on a lazy seq would prepend, reversing
+          ;; arrival order.
+          (update :events (fn [es] (into [] (remove #(and (= (:changed-path item) (:changed-path %))
+                                                         (or
+                                                           (= :modify (:type %))
+                                                           (= :create (:type %))))
+                                                    es))))
           (update :events conj item))
     ;; default add the event to our tracker
     :else
